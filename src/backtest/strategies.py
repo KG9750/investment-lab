@@ -40,20 +40,23 @@ def etf_rotation_returns(
         return pd.DataFrame(columns=["date", "strategy_return", "equity"])
     rebalance_days = set(month_end_trading_days(market, dates[0], dates[-1]))
     holdings: set[str] = set()
+    pending_holdings: set[str] | None = None
     rows: list[dict] = []
     cost = float(costs.get("commission", 0)) + float(costs.get("slippage", 0))
     for day in dates:
         day_rows = df[df["date"] == day]
-        if day in rebalance_days or not holdings:
-            ranked = day_rows.dropna(subset=["momentum"]).sort_values("momentum", ascending=False)
-            new_holdings = set(ranked.head(top_n)["symbol"])
-            turnover = len(holdings.symmetric_difference(new_holdings)) / max(top_n, 1)
-            holdings = new_holdings
-        else:
-            turnover = 0.0
+        turnover = 0.0
+        if pending_holdings is not None:
+            turnover = len(holdings.symmetric_difference(pending_holdings)) / max(top_n, 1)
+            holdings = pending_holdings
+            pending_holdings = None
         held = day_rows[day_rows["symbol"].isin(holdings)]
         daily_return = 0.0 if held.empty else float(held["asset_return"].mean())
         rows.append({"date": day, "strategy_return": daily_return - turnover * cost})
+        if day in rebalance_days or not holdings:
+            ranked = day_rows.dropna(subset=["momentum"]).sort_values("momentum", ascending=False)
+            if not ranked.empty:
+                pending_holdings = set(ranked.head(top_n)["symbol"])
     out = pd.DataFrame(rows)
     out["equity"] = (1 + out["strategy_return"]).cumprod()
     return out

@@ -15,6 +15,22 @@ def run_price_quality_checks(
     df = ParquetStore().read_prices(market=market)
     if snapshot_id and not df.empty and "snapshot_id" in df.columns:
         df = df[df["snapshot_id"] == snapshot_id]
+    report = check_price_frame(df, snapshot_id=snapshot_id, market=market)
+    report_path = None
+    if not report.empty:
+        report_path = (
+            DATA_DIR / "metadata" / f"data_quality_{snapshot_id or market or 'all'}.parquet"
+        )
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report.to_parquet(report_path, index=False)
+    return report, report_path
+
+
+def check_price_frame(
+    df: pd.DataFrame,
+    snapshot_id: str | None = None,
+    market: str | None = None,
+) -> pd.DataFrame:
     checks: list[dict] = []
     if df.empty:
         checks.append(
@@ -53,15 +69,7 @@ def run_price_quality_checks(
         )
         if (zero_volume >= 20).any():
             checks.append(_row(df, "zero_volume_20d", "warning", int((zero_volume >= 20).sum())))
-    report = pd.DataFrame(checks)
-    report_path = None
-    if not report.empty:
-        report_path = (
-            DATA_DIR / "metadata" / f"data_quality_{snapshot_id or market or 'all'}.parquet"
-        )
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        report.to_parquet(report_path, index=False)
-    return report, report_path
+    return pd.DataFrame(checks)
 
 
 def _row(df: pd.DataFrame, check_type: str, severity: str, affected_rows: int) -> dict:

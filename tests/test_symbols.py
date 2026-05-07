@@ -9,5 +9,8 @@ def test_symbol_normalize_denormalize_cn() -> None:
 
 def test_symbol_normalize_denormalize_hk_us() -> None:
     assert normalize_symbol("00700", "HK", "akshare") == "0700.HK"
+    assert denormalize_symbol("0700.HK", "HK", "akshare") == "00700"
+    assert denormalize_symbol("9988.HK", "HK", "akshare") == "09988"
+    assert denormalize_symbol("0005.HK", "HK", "akshare") == "00005"
     assert denormalize_symbol("0700.HK", "HK", "yfinance") == "0700.HK"
     assert normalize_symbol("spy", "US", "yfinance") == "SPY"

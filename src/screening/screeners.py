@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.config import DATA_DIR, load_yaml
+from src.data_quality.checks import check_price_frame
 from src.factors.combined import add_phase_one_factors
 from src.indicators import add_indicators
 from src.screening.rules import apply_filter, enrich_rule_fields
@@ -20,6 +21,11 @@ def run_screen(config_path: str | Path) -> tuple[pd.DataFrame, dict]:
     prices = ParquetStore().read_prices(market=market, symbols=members or None)
     if prices.empty:
         raise ValueError(f"No local price data found for screen {config['name']} market={market}")
+    quality = check_price_frame(prices, market=market)
+    blocking = quality[quality["severity"] == "blocking"] if not quality.empty else quality
+    if not blocking.empty:
+        checks = ", ".join(sorted(blocking["check_type"].unique()))
+        raise ValueError(f"Blocking data-quality checks failed before screen: {checks}")
     df = add_phase_one_factors(add_indicators(prices), market)
     latest_dates = df.groupby("symbol")["date"].transform("max")
     latest = enrich_rule_fields(df[df["date"] == latest_dates].copy())

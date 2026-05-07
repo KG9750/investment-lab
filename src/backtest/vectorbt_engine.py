@@ -25,17 +25,20 @@ def run_backtest(config_path: str | Path) -> tuple[pd.DataFrame, dict]:
     )
     if prices.empty:
         raise ValueError(f"No local price data found for backtest {config['name']} market={market}")
+    strategy_prices = prices[prices["symbol"].isin(members)].copy()
+    if strategy_prices.empty:
+        raise ValueError(f"No strategy price data found for universe {config['universe']}")
     strategy = config["strategy"]
     if strategy["type"] == "ma_cross":
         result = ma_cross_returns(
-            prices[prices["symbol"].isin(members)],
+            strategy_prices,
             int(strategy.get("fast_window", 20)),
             int(strategy.get("slow_window", 60)),
             config.get("costs", {}),
         )
     elif strategy["type"] == "etf_rotation":
         result = etf_rotation_returns(
-            prices[prices["symbol"].isin(members)],
+            strategy_prices,
             int(strategy.get("lookback", 60)),
             int(strategy.get("top_n", 2)),
             config.get("costs", {}),
@@ -48,7 +51,22 @@ def run_backtest(config_path: str | Path) -> tuple[pd.DataFrame, dict]:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     result.to_parquet(out_path, index=False)
     stats = summarize_returns(result["strategy_return"])
-    meta = {"run_id": run_id, "path": str(out_path), "config": config, **stats}
+    meta = {
+        "run_id": run_id,
+        "path": str(out_path),
+        "config": config,
+        "snapshot_id": ",".join(
+            sorted(strategy_prices["snapshot_id"].dropna().astype(str).unique())
+        ),
+        "data_range_start": strategy_prices["date"].min(),
+        "data_range_end": strategy_prices["date"].max(),
+        "provider_summary": {
+            "providers": sorted(strategy_prices["provider"].dropna().astype(str).unique()),
+            "symbols": sorted(strategy_prices["symbol"].dropna().astype(str).unique()),
+            "benchmark": benchmark,
+        },
+        **stats,
+    }
     return result, meta
 
 

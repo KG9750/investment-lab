@@ -18,7 +18,7 @@ from src.reporting.markdown_report import generate_markdown_report
 from src.reporting.quantstats_report import generate_quantstats_html
 from src.screening.screeners import run_screen
 from src.screening.universe import get_universe_members
-from src.storage.duckdb_client import init_db, record_run, record_snapshot
+from src.storage.duckdb_client import connect, init_db, record_run, record_snapshot
 from src.storage.metadata import config_hash, make_run_id, make_snapshot_id, utc_now_str
 from src.storage.parquet_store import ParquetStore
 from src.symbols.normalize import normalize_symbol
@@ -264,7 +264,7 @@ def data_quality(
                 "warning_count": warnings,
                 "blocking_error_count": blocking,
                 "report_path": summary["report_path"],
-                "errors": "[]",
+                "errors": json.dumps(summary["errors"], ensure_ascii=False),
             }
         )
         _emit(summary, output, exit_code=1 if blocking else 0)
@@ -333,8 +333,12 @@ def backtest(
         summary.update(
             {
                 "run_id": meta["run_id"],
+                "snapshot_id": meta.get("snapshot_id"),
                 "row_count": int(len(result)),
                 "report_path": str(html) if html else meta["path"],
+                "data_range_start": meta.get("data_range_start"),
+                "data_range_end": meta.get("data_range_end"),
+                "provider_summary": meta.get("provider_summary", {}),
                 "total_return": meta["total_return"],
                 "annual_return": meta["annual_return"],
                 "max_drawdown": meta["max_drawdown"],
@@ -348,6 +352,14 @@ def backtest(
                 "task": "backtest",
                 "config_path": str(config),
                 "config_hash": summary["config_hash"],
+                "snapshot_id": meta.get("snapshot_id"),
+                "data_range_start": meta.get("data_range_start"),
+                "data_range_end": meta.get("data_range_end"),
+                "provider_summary": json.dumps(
+                    meta.get("provider_summary", {}),
+                    ensure_ascii=False,
+                    default=str,
+                ),
                 "created_at": summary["started_at"],
                 "finished_at": utc_now_str(),
                 "status": "ok",
@@ -370,7 +382,19 @@ def report(
     summary = _base_summary("report", run_id)
     try:
         path = generate_markdown_report(run_id)
-        summary.update({"report_path": str(path), "row_count": 1})
+        with connect(read_only=False) as con:
+            run = con.execute(
+                "SELECT snapshot_id, config_hash FROM pipeline_runs WHERE run_id = ?",
+                [run_id],
+            ).fetchone()
+        summary.update(
+            {
+                "snapshot_id": run[0] if run else None,
+                "config_hash": run[1] if run else None,
+                "report_path": str(path),
+                "row_count": 1,
+            }
+        )
         _emit(summary, output)
     except Exception as exc:
         _fail(summary, exc, output)

@@ -48,6 +48,6 @@ def denormalize_symbol(unified: str, market: str, target_provider: str = "manual
     if market == "HK":
         digits = value.removesuffix(".HK").zfill(4)
         if provider == "akshare":
-            return "0" + digits if len(digits) == 4 and not digits.startswith("0") else digits
+            return digits.zfill(5)
         return f"{digits}.HK"
     return value
