@@ -1,0 +1,18 @@
+name: trend_cn
+market: CN
+universe: 沪深300
+as_of: latest
+filters:
+  - field: close_above_ma60
+    op: eq
+    value: true
+  - field: ma20_above_ma60
+    op: eq
+    value: true
+  - field: momentum_60d_rank_pct
+    op: le
+    value: 0.30
+sort:
+  - field: momentum_60d
+    direction: desc
+limit: 30

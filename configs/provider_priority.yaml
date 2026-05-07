@@ -1,0 +1,9 @@
+CN:
+  price: [akshare, yfinance]
+  fundamentals: [akshare]
+HK:
+  price: [akshare, yfinance]
+  fundamentals: [akshare]
+US:
+  price: [yfinance]
+  fundamentals: []

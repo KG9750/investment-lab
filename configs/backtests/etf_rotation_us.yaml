@@ -1,0 +1,20 @@
+name: etf_rotation_us
+market: US
+universe: US_ETF_ROTATION
+start: "2015-01-01"
+end: latest
+benchmark:
+  symbol: SPY
+  return_type: adjusted_price
+  dividend_adjusted: unknown
+strategy:
+  type: etf_rotation
+  lookback: 60
+  top_n: 2
+rebalance: monthly
+costs:
+  commission: 0.0
+  slippage: 0.0005
+output:
+  report: true
+  quantstats: true

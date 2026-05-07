@@ -1,0 +1,15 @@
+name: us_momentum
+market: US
+universe: US_ETF_ROTATION
+as_of: latest
+filters:
+  - field: close_above_ma120
+    op: eq
+    value: true
+  - field: volatility_20d_rank_pct
+    op: le
+    value: 0.80
+sort:
+  - field: momentum_60d
+    direction: desc
+limit: 10

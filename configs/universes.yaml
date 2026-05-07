@@ -1,0 +1,57 @@
+CN_ALL:
+  market: CN
+  type: all
+  provider: akshare
+  membership_mode: latest_only_phase1
+  symbol_format: unified
+
+沪深300:
+  market: CN
+  type: index
+  index_code: "000300.SH"
+  provider: akshare
+  membership_mode: point_in_time
+  symbol_format: unified
+
+恒生科技:
+  market: HK
+  type: index
+  index_code: "HSTECH.HK"
+  provider: akshare
+  membership_mode: latest_only_phase1
+  symbol_format: unified
+
+港股通:
+  market: HK
+  type: connect_program
+  index_code: null
+  provider: akshare
+  membership_mode: latest_only_phase1
+  provider_function: stock_hk_ggt_components_em
+  symbol_format: unified
+
+S&P 500:
+  market: US
+  type: index
+  index_code: "^GSPC"
+  provider: external_seed
+  membership_mode: latest_only_phase1
+  members: [AAPL, MSFT, NVDA, AMZN, META, GOOGL, BRK-B, JPM, XOM, UNH]
+  symbol_format: unified
+
+Nasdaq-100:
+  market: US
+  type: index
+  index_code: "^NDX"
+  provider: external_seed
+  membership_mode: latest_only_phase1
+  members: [AAPL, MSFT, NVDA, AMZN, META, GOOGL, AVGO, COST, TSLA, NFLX]
+  symbol_format: unified
+
+US_ETF_ROTATION:
+  market: US
+  type: watchlist
+  provider: manual
+  membership_mode: static
+  members: [SPY, QQQ, IWM, EFA, EEM, TLT, GLD]
+  symbol_format: unified

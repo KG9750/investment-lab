@@ -1,0 +1,35 @@
+akshare:
+  enabled: true
+  request_interval_ms: 1000
+  timeout_seconds: 30
+  max_retries: 3
+  retry_backoff: exponential
+  batch_size: 1
+  max_concurrency: 1
+
+yfinance:
+  enabled: true
+  request_interval_ms: 500
+  timeout_seconds: 15
+  max_retries: 2
+  retry_backoff: exponential
+  batch_size: 20
+  max_concurrency: 2
+
+openbb:
+  enabled: false
+  request_interval_ms: 1000
+  timeout_seconds: 30
+  max_retries: 2
+  retry_backoff: exponential
+  batch_size: 10
+  max_concurrency: 1
+
+efinance:
+  enabled: false
+  request_interval_ms: 800
+  timeout_seconds: 20
+  max_retries: 2
+  retry_backoff: exponential
+  batch_size: 1
+  max_concurrency: 1

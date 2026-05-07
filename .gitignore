@@ -1,0 +1,19 @@
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+
+# Local environment
+.env
+AGENTS.md
+
+# Generated local research data
+data/
+
+# Logs and reports generated locally
+*.log

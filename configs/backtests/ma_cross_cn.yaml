@@ -1,0 +1,21 @@
+name: ma_cross_cn
+market: CN
+universe: 沪深300
+start: "2018-01-01"
+end: latest
+benchmark:
+  symbol: "000300.SH"
+  return_type: price_return
+  dividend_adjusted: false
+strategy:
+  type: ma_cross
+  fast_window: 20
+  slow_window: 60
+rebalance: daily
+costs:
+  commission: 0.0003
+  slippage: 0.0005
+  stamp_tax_sell: 0.001
+output:
+  report: true
+  quantstats: true
