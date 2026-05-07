@@ -1,5 +1,5 @@
 CN:
-  price: [akshare, yfinance]
+  price: [akshare]
   fundamentals: [akshare]
 HK:
   price: [akshare, yfinance]
