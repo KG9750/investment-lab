@@ -69,3 +69,33 @@ def _last_json(text: str) -> dict | None:
 
 def open_report(path: str | Path) -> str:
     return Path(path).read_text(encoding="utf-8")
+
+
+def build_update_args(
+    *,
+    market: str,
+    start: str,
+    adjust: str,
+    symbols: str | None = None,
+    universe: str | None = None,
+    resume: bool = True,
+) -> list[str]:
+    args = [
+        "update-data",
+        "--market",
+        market,
+        "--start",
+        start,
+        "--adjust",
+        adjust,
+    ]
+    if universe:
+        args.extend(["--universe", universe])
+    elif symbols:
+        args.extend(["--symbols", symbols])
+    else:
+        raise ValueError("Either symbols or universe is required")
+    if resume:
+        args.append("--resume")
+    args.extend(["--output", "json"])
+    return args
