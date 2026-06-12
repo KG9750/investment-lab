@@ -79,6 +79,7 @@ def build_update_args(
     symbols: str | None = None,
     universe: str | None = None,
     resume: bool = True,
+    strict: bool = False,
 ) -> list[str]:
     args = [
         "update-data",
@@ -97,5 +98,53 @@ def build_update_args(
         raise ValueError("Either symbols or universe is required")
     if resume:
         args.append("--resume")
+    if strict:
+        args.append("--strict")
+    args.extend(["--output", "json"])
+    return args
+
+
+def build_provider_health_args(
+    *,
+    mode: str,
+    market: str | None = None,
+    provider: str | None = None,
+    dry_run: bool = False,
+) -> list[str]:
+    args = ["provider-health", "--mode", mode]
+    if market:
+        args.extend(["--market", market])
+    if provider:
+        args.extend(["--provider", provider])
+    if dry_run:
+        args.append("--dry-run")
+    args.extend(["--output", "json"])
+    return args
+
+
+def build_cross_provider_args(
+    *,
+    market: str,
+    symbols: str,
+    start: str,
+    end: str | None = None,
+    close_threshold_pct: float = 0.5,
+    dry_run: bool = False,
+) -> list[str]:
+    args = [
+        "cross-provider-check",
+        "--market",
+        market,
+        "--symbols",
+        symbols,
+        "--start",
+        start,
+        "--close-threshold-pct",
+        str(close_threshold_pct),
+    ]
+    if end:
+        args.extend(["--end", end])
+    if dry_run:
+        args.append("--dry-run")
     args.extend(["--output", "json"])
     return args

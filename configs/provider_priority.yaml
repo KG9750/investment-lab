@@ -1,9 +1,9 @@
 CN:
-  price: [akshare]
-  fundamentals: [akshare]
+  price: [akshare, baostock, efinance]
+  fundamentals: [akshare, baostock]
 HK:
-  price: [akshare, yfinance]
+  price: [akshare, yfinance, efinance]
   fundamentals: [akshare]
 US:
-  price: [yfinance]
+  price: [yfinance, efinance]
   fundamentals: []

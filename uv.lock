@@ -153,6 +153,18 @@ wheels = [
 ]
 
 [[package]]
+name = "baostock"
+version = "0.9.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pandas" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fa/2e/32f7c36a6d021b7cb8bf3bd75b4de8d74e2405e21a5ba1bf1e3706b2d34b/baostock-0.9.2.tar.gz", hash = "sha256:7a3fbba3417b308f774e84a62fc10909a70e81384051b3d693cbe54213686544", size = 25513, upload-time = "2026-06-06T12:20:20.783Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/28/b8/ccba7fa0dd4d1809a6244c04e58173b648fbb64d7cb158387b70d6695e7f/baostock-0.9.2-py3-none-any.whl", hash = "sha256:f7aaca22eb010db268a2b8bc3ed1a8743cc6f1989902477c65c1c3c022d2ecbf", size = 47940, upload-time = "2026-06-06T12:20:19.626Z" },
+]
+
+[[package]]
 name = "beautifulsoup4"
 version = "4.14.3"
 source = { registry = "https://pypi.org/simple" }
@@ -575,6 +587,25 @@ wheels = [
 ]
 
 [[package]]
+name = "efinance"
+version = "0.5.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "beautifulsoup4" },
+    { name = "jsonpath" },
+    { name = "multitasking" },
+    { name = "pandas" },
+    { name = "requests" },
+    { name = "retry" },
+    { name = "rich" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8c/5c/2c2cf79cfd35d5315ed447f47adbda79ed57b775b3a91d3d00e5bed44f95/efinance-0.5.8.tar.gz", hash = "sha256:03af5b1d6bf8d38a521b6cab3aa2020c251d3a51bd905e8e69852a896710720a", size = 92845, upload-time = "2026-03-18T14:33:28.902Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a2/49/813c6f31cc969e30b263000dbdb9770c9435a6626d6d636c18c936703eeb/efinance-0.5.8-py3-none-any.whl", hash = "sha256:d8ebafedf64c865464392ef3ba8b5fadaf2b9770ac0f22d71913bc863138865c", size = 75088, upload-time = "2026-03-18T14:33:27.459Z" },
+]
+
+[[package]]
 name = "et-xmlfile"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -787,7 +818,9 @@ source = { virtual = "." }
 dependencies = [
     { name = "akshare" },
     { name = "altair" },
+    { name = "baostock" },
     { name = "duckdb" },
+    { name = "efinance" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pandas-market-calendars" },
@@ -800,8 +833,12 @@ dependencies = [
     { name = "scipy" },
     { name = "streamlit" },
     { name = "typer" },
-    { name = "vectorbt" },
     { name = "yfinance" },
+]
+
+[package.optional-dependencies]
+vectorbt = [
+    { name = "vectorbt" },
 ]
 
 [package.dev-dependencies]
@@ -815,7 +852,9 @@ dev = [
 requires-dist = [
     { name = "akshare", specifier = ">=1.16.0" },
     { name = "altair", specifier = ">=5.0.0" },
+    { name = "baostock", specifier = ">=0.8.9" },
     { name = "duckdb", specifier = ">=1.0.0" },
+    { name = "efinance", specifier = ">=0.5.5" },
     { name = "numpy", specifier = ">=1.26.0" },
     { name = "pandas", specifier = ">=2.2.0" },
     { name = "pandas-market-calendars", specifier = ">=4.4.0" },
@@ -828,9 +867,10 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.12.0" },
     { name = "streamlit", specifier = ">=1.35.0" },
     { name = "typer", specifier = ">=0.12.0" },
-    { name = "vectorbt", specifier = ">=0.26.0" },
+    { name = "vectorbt", marker = "extra == 'vectorbt'", specifier = ">=0.26.0" },
     { name = "yfinance", specifier = ">=0.2.40" },
 ]
+provides-extras = ["vectorbt"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1989,6 +2029,15 @@ wheels = [
 ]
 
 [[package]]
+name = "py"
+version = "1.11.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/98/ff/fec109ceb715d2a6b4c4a85a61af3b40c723a961e8828319fbcb15b868dc/py-1.11.0.tar.gz", hash = "sha256:51c75c4126074b472f746a24399ad32f6053d1b34b68d2fa41e558e6f4a98719", size = 207796, upload-time = "2021-11-04T17:17:01.377Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f6/f0/10642828a8dfb741e5f3fbaac830550a518a775c7fff6f04a007259b0548/py-1.11.0-py2.py3-none-any.whl", hash = "sha256:607c53218732647dff4acdfcd50cb62615cedf612e72d1724fb1a0cc6405b378", size = 98708, upload-time = "2021-11-04T17:17:00.152Z" },
+]
+
+[[package]]
 name = "py-mini-racer"
 version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2464,6 +2513,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5f/a4/98b9c7c6428a668bf7e42ebb7c79d576a1c3c1e3ae2d47e674b468388871/requests-2.33.1.tar.gz", hash = "sha256:18817f8c57c6263968bc123d237e3b8b08ac046f5456bd1e307ee8f4250d3517", size = 134120, upload-time = "2026-03-30T16:09:15.531Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d7/8e/7540e8a2036f79a125c1d2ebadf69ed7901608859186c856fa0388ef4197/requests-2.33.1-py3-none-any.whl", hash = "sha256:4e6d1ef462f3626a1f0a0a9c42dd93c63bad33f9f1c1937509b8c5c8718ab56a", size = 64947, upload-time = "2026-03-30T16:09:13.83Z" },
+]
+
+[[package]]
+name = "retry"
+version = "0.9.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "decorator" },
+    { name = "py" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9d/72/75d0b85443fbc8d9f38d08d2b1b67cc184ce35280e4a3813cda2f445f3a4/retry-0.9.2.tar.gz", hash = "sha256:f8bfa8b99b69c4506d6f5bd3b0aabf77f98cdb17f3c9fc3f5ca820033336fba4", size = 6448, upload-time = "2016-05-11T13:58:51.541Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4b/0d/53aea75710af4528a25ed6837d71d117602b01946b307a3912cb3cfcbcba/retry-0.9.2-py2.py3-none-any.whl", hash = "sha256:ccddf89761fa2c726ab29391837d4327f819ea14d244c232a1d24c67a2f98606", size = 7986, upload-time = "2016-05-11T13:58:39.925Z" },
 ]
 
 [[package]]

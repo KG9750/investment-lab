@@ -29,10 +29,21 @@ AKSHARE_ADJUST_MAP = {
 
 
 class ProviderError(RuntimeError):
-    def __init__(self, message: str, provider: str, retryable: bool = True) -> None:
+    def __init__(
+        self,
+        message: str,
+        provider: str,
+        retryable: bool = True,
+        error_type: str = "provider_error",
+        symbol: str | None = None,
+        details: dict | None = None,
+    ) -> None:
         super().__init__(message)
         self.provider = provider
         self.retryable = retryable
+        self.error_type = error_type
+        self.symbol = symbol
+        self.details = details or {}
 
 
 @dataclass(frozen=True)
@@ -43,6 +54,7 @@ class PriceRequest:
     end: str | None = None
     adjust: str = "provider_default"
     snapshot_id: str | None = None
+    timeout_seconds: int | None = None
 
 
 class PriceSource(Protocol):
@@ -68,6 +80,22 @@ def resolve_adjust(provider: str, requested: str) -> tuple[str, object]:
         if requested == "backward_adjusted":
             return "backward_adjusted", "hfq"
         return "raw", ""
+    if provider == "baostock":
+        if requested == "provider_default":
+            return "forward_adjusted", "2"
+        if requested == "forward_adjusted":
+            return "forward_adjusted", "2"
+        if requested == "backward_adjusted":
+            return "backward_adjusted", "1"
+        return "raw", "3"
+    if provider == "efinance":
+        if requested == "provider_default":
+            return "forward_adjusted", 1
+        if requested == "forward_adjusted":
+            return "forward_adjusted", 1
+        if requested == "backward_adjusted":
+            return "backward_adjusted", 2
+        return "raw", 0
     if requested not in ADJUST_VALUES:
         return "unknown", requested
     return requested, requested
@@ -98,6 +126,7 @@ def standardize_price_frame(
         "收盘": "close",
         "成交量": "volume",
         "成交额": "amount",
+        "股票代码": "provider_symbol",
     }
     df = raw.reset_index().rename(columns=rename)
     if "date" not in df.columns and "index" in df.columns:
@@ -105,7 +134,14 @@ def standardize_price_frame(
     required = ["date", "open", "high", "low", "close"]
     missing = [col for col in required if col not in df.columns]
     if missing:
-        raise ProviderError(f"Missing price columns {missing}", provider=provider, retryable=False)
+        raise ProviderError(
+            f"Missing price columns {missing}",
+            provider=provider,
+            retryable=False,
+            error_type="schema_changed",
+            symbol=request.symbol,
+            details={"missing_columns": missing},
+        )
     df["date"] = pd.to_datetime(df["date"]).dt.date
     for column in ["open", "high", "low", "close", "volume", "amount"]:
         if column not in df.columns:
@@ -148,3 +184,18 @@ def sleep_ms(milliseconds: int) -> None:
 
 def provider_symbol_for(symbol: str, market: str, provider: str) -> str:
     return denormalize_symbol(normalize_symbol(symbol, market, provider), market, provider)
+
+
+def classify_provider_exception(exc: Exception) -> str:
+    text = str(exc).lower()
+    if "rate limit" in text or "too many requests" in text:
+        return "rate_limited"
+    if "timeout" in text or "timed out" in text:
+        return "timeout"
+    if "proxy" in text:
+        return "proxy_error"
+    if "connection" in text or "network" in text or "ssl" in text:
+        return "network_error"
+    if "missing price columns" in text or "column" in text or "schema" in text:
+        return "schema_changed"
+    return "provider_error"

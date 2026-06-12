@@ -10,7 +10,8 @@ CN_ALL:
   type: index
   index_code: "000300.SH"
   provider: akshare
-  membership_mode: point_in_time
+  membership_mode: seed_phase1
+  members: [000001.SZ, 600000.SH, 000858.SZ, 600519.SH, 300750.SZ]
   symbol_format: unified
 
 恒生科技:
@@ -18,7 +19,8 @@ CN_ALL:
   type: index
   index_code: "HSTECH.HK"
   provider: akshare
-  membership_mode: latest_only_phase1
+  membership_mode: seed_phase1
+  members: [0700.HK, 9988.HK, 3690.HK, 1810.HK]
   symbol_format: unified
 
 港股通:
@@ -26,8 +28,9 @@ CN_ALL:
   type: connect_program
   index_code: null
   provider: akshare
-  membership_mode: latest_only_phase1
+  membership_mode: seed_phase1
   provider_function: stock_hk_ggt_components_em
+  members: [0700.HK, 9988.HK, 3690.HK, 0005.HK]
   symbol_format: unified
 
 S&P 500:

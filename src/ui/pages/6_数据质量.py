@@ -7,18 +7,20 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from src.ui.chrome import inject_workbench_css, page_header, render_cli_result
 from src.ui.cli_bridge import run_cli
 
-st.title("Data Quality")
-snapshot_id = st.text_input("Snapshot ID", "")
-market = st.text_input("Market", "")
-if st.button("Run quality check"):
+inject_workbench_css()
+page_header("数据质量", "本地数据门禁")
+
+left, right = st.columns([2, 1])
+snapshot_id = left.text_input("快照 ID", "")
+market = right.selectbox("市场", ["", "US", "CN", "HK"])
+if st.button("运行质量检查"):
     args = ["data-quality", "--output", "json"]
     if snapshot_id:
         args.extend(["--snapshot-id", snapshot_id])
     if market:
         args.extend(["--market", market])
     result = run_cli(args)
-    st.code(" ".join(result.command))
-    st.write({"exit_code": result.returncode})
-    st.json(result.json_summary or {})
+    render_cli_result(result)

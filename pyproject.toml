@@ -7,7 +7,9 @@ requires-python = ">=3.11"
 dependencies = [
     "akshare>=1.16.0",
     "altair>=5.0.0",
+    "baostock>=0.8.9",
     "duckdb>=1.0.0",
+    "efinance>=0.5.5",
     "numpy>=1.26.0",
     "pandas>=2.2.0",
     "pandas-market-calendars>=4.4.0",
@@ -20,9 +22,11 @@ dependencies = [
     "scipy>=1.12.0",
     "streamlit>=1.35.0",
     "typer>=0.12.0",
-    "vectorbt>=0.26.0",
     "yfinance>=0.2.40",
 ]
+
+[project.optional-dependencies]
+vectorbt = ["vectorbt>=0.26.0"]
 
 [dependency-groups]
 dev = [
@@ -39,7 +43,7 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
-"src/ui/streamlit_app.py" = ["E402"]
+"src/ui/投资研究台.py" = ["E402"]
 "src/ui/pages/*.py" = ["E402"]
 
 [tool.pytest.ini_options]

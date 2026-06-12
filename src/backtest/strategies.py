@@ -20,7 +20,17 @@ def ma_cross_returns(
     turnover = signal.astype(int).groupby(df["symbol"]).diff().abs().fillna(signal.astype(int))
     cost = float(costs.get("commission", 0)) + float(costs.get("slippage", 0))
     df["strategy_return"] = signal.astype(float) * returns - turnover * cost
-    portfolio = df.groupby("date")["strategy_return"].mean().reset_index()
+    df["is_held"] = signal.astype(bool)
+    universe_count = int(df["symbol"].nunique())
+    grouped = df.groupby("date", as_index=False).agg(
+        strategy_return=("strategy_return", "sum"),
+        held_count=("is_held", "sum"),
+    )
+    portfolio = grouped.rename(columns={"held_count": "held_count"})
+    portfolio["strategy_return"] = portfolio["strategy_return"] / max(universe_count, 1)
+    portfolio["universe_count"] = universe_count
+    portfolio["gross_exposure"] = portfolio["held_count"] / max(universe_count, 1)
+    portfolio["cash_weight"] = 1 - portfolio["gross_exposure"]
     portfolio["equity"] = (1 + portfolio["strategy_return"]).cumprod()
     return portfolio
 

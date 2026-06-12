@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -7,7 +8,7 @@ import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = PROJECT_ROOT / "configs"
-DATA_DIR = PROJECT_ROOT / "data"
+DATA_DIR = Path(os.getenv("INVESTMENT_DATA_DIR", str(PROJECT_ROOT / "data")))
 
 
 def ensure_data_dirs() -> None:

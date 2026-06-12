@@ -34,3 +34,36 @@ def test_quality_detects_invalid_prices(tmp_path: Path, monkeypatch) -> None:
     store.write_prices(df, "US")
     report, _ = run_price_quality_checks(snapshot_id="s1", market="US")
     assert "invalid_ohlc" in set(report["check_type"])
+
+
+def test_quality_detects_duplicate_persisted_prices(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("src.storage.parquet_store.DATA_DIR", tmp_path)
+    monkeypatch.setattr("src.data_quality.checks.DATA_DIR", tmp_path)
+    store = ParquetStore(tmp_path)
+    df = pd.DataFrame(
+        [
+            {
+                "symbol": "SPY",
+                "provider_symbol": "SPY",
+                "market": "US",
+                "date": "2024-01-02",
+                "open": 1,
+                "high": 2,
+                "low": 1,
+                "close": 2,
+                "volume": 100,
+                "amount": 0,
+                "adjust": "auto_adjusted",
+                "currency": "USD",
+                "provider": "test",
+                "row_fetched_at": "2024-01-02T00:00:00Z",
+                "snapshot_id": "s1",
+            }
+        ]
+    )
+    store.write_prices(df, "US")
+    store.write_prices(df.assign(row_fetched_at="2024-01-03T00:00:00Z"), "US")
+
+    report, _ = run_price_quality_checks(snapshot_id="s1", market="US")
+
+    assert "duplicate_price" in set(report["check_type"])

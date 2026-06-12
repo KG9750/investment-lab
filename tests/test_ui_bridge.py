@@ -1,4 +1,9 @@
-from src.ui.cli_bridge import _last_json, build_update_args
+from src.ui.cli_bridge import (
+    _last_json,
+    build_cross_provider_args,
+    build_provider_health_args,
+    build_update_args,
+)
 
 
 def test_cli_bridge_reads_last_json_line() -> None:
@@ -29,3 +34,34 @@ def test_build_update_args_prefers_universe() -> None:
     )
     assert "--universe" in args
     assert "--symbols" not in args
+
+
+def test_build_provider_health_args_uses_json_output() -> None:
+    args = build_provider_health_args(
+        mode="quick",
+        market="CN",
+        provider="akshare",
+        dry_run=True,
+    )
+
+    assert args[:2] == ["provider-health", "--mode"]
+    assert "--market" in args
+    assert "--provider" in args
+    assert "--dry-run" in args
+    assert args[-2:] == ["--output", "json"]
+
+
+def test_build_cross_provider_args_uses_cli_contract() -> None:
+    args = build_cross_provider_args(
+        market="US",
+        symbols="SPY,QQQ",
+        start="2024-01-01",
+        close_threshold_pct=0.5,
+        dry_run=True,
+    )
+
+    assert args[0] == "cross-provider-check"
+    assert args[args.index("--symbols") + 1] == "SPY,QQQ"
+    assert args[args.index("--close-threshold-pct") + 1] == "0.5"
+    assert "--dry-run" in args
+    assert args[-2:] == ["--output", "json"]

@@ -10,6 +10,9 @@ import duckdb
 from src.config import DATA_DIR, ensure_data_dirs
 
 DEFAULT_DB_PATH = DATA_DIR / "investment.duckdb"
+MIGRATIONS: list[tuple[int, str]] = [
+    (1, "ensure_observability_columns"),
+]
 
 
 def get_db_path() -> Path:
@@ -28,7 +31,7 @@ def connect(read_only: bool = False) -> duckdb.DuckDBPyConnection:
 def _connect_with_retry(
     db_path: Path,
     read_only: bool = False,
-    attempts: int = 8,
+    attempts: int = 20,
 ) -> duckdb.DuckDBPyConnection:
     last_exc: Exception | None = None
     for attempt in range(attempts):
@@ -46,8 +49,17 @@ def _connect_with_retry(
 def init_db(con: duckdb.DuckDBPyConnection | None = None) -> None:
     own_connection = con is None
     if con is None:
-        con = duckdb.connect(str(get_db_path()))
+        db_path = get_db_path()
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        con = _connect_with_retry(db_path)
     statements = [
+        """
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            applied_at TIMESTAMP NOT NULL
+        )
+        """,
         """
         CREATE TABLE IF NOT EXISTS pipeline_runs (
             run_id TEXT PRIMARY KEY,
@@ -129,11 +141,59 @@ def init_db(con: duckdb.DuckDBPyConnection | None = None) -> None:
             PRIMARY KEY (unified_symbol, provider, provider_symbol)
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS data_quality_events (
+            event_id TEXT PRIMARY KEY,
+            run_id TEXT,
+            snapshot_id TEXT,
+            market TEXT,
+            symbol TEXT,
+            provider TEXT,
+            event_type TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            message TEXT NOT NULL,
+            retryable BOOLEAN DEFAULT FALSE,
+            details TEXT,
+            created_at TIMESTAMP NOT NULL
+        )
+        """,
     ]
     for statement in statements:
         con.execute(statement)
+    _run_migrations(con)
     if own_connection:
         con.close()
+
+
+def _run_migrations(con: duckdb.DuckDBPyConnection) -> None:
+    applied = {
+        int(row[0])
+        for row in con.execute("SELECT version FROM schema_migrations").fetchall()
+    }
+    for version, name in MIGRATIONS:
+        if version in applied:
+            continue
+        if version == 1:
+            _ensure_column(con, "pipeline_runs", "provider_summary", "TEXT")
+            _ensure_column(con, "data_quality_events", "details", "TEXT")
+        con.execute(
+            "INSERT INTO schema_migrations VALUES (?, ?, CURRENT_TIMESTAMP)",
+            [version, name],
+        )
+
+
+def _ensure_column(
+    con: duckdb.DuckDBPyConnection,
+    table_name: str,
+    column_name: str,
+    column_type: str,
+) -> None:
+    columns = {
+        str(row[1])
+        for row in con.execute(f"PRAGMA table_info('{table_name}')").fetchall()
+    }
+    if column_name not in columns:
+        con.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
 
 
 def record_snapshot(snapshot: dict[str, Any]) -> None:
@@ -180,5 +240,34 @@ def record_run(run: dict[str, Any]) -> None:
                 run.get("blocking_error_count", 0),
                 run.get("report_path"),
                 run.get("errors", "[]"),
+            ],
+        )
+
+
+def record_quality_events(events: list[dict[str, Any]]) -> None:
+    if not events:
+        return
+    with connect() as con:
+        con.executemany(
+            """
+            INSERT OR REPLACE INTO data_quality_events
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                [
+                    event.get("event_id"),
+                    event.get("run_id"),
+                    event.get("snapshot_id"),
+                    event.get("market"),
+                    event.get("symbol"),
+                    event.get("provider"),
+                    event.get("event_type"),
+                    event.get("severity"),
+                    event.get("message"),
+                    event.get("retryable", False),
+                    event.get("details"),
+                    event.get("created_at"),
+                ]
+                for event in events
             ],
         )

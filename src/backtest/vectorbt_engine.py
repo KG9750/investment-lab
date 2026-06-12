@@ -6,7 +6,7 @@ import pandas as pd
 
 from src.backtest.strategies import etf_rotation_returns, ma_cross_returns
 from src.config import DATA_DIR, load_yaml
-from src.screening.universe import get_universe_members
+from src.screening.universe import get_universe_config, get_universe_members
 from src.storage.metadata import make_run_id
 from src.storage.parquet_store import ParquetStore
 
@@ -14,6 +14,7 @@ from src.storage.parquet_store import ParquetStore
 def run_backtest(config_path: str | Path) -> tuple[pd.DataFrame, dict]:
     config = load_yaml(config_path)
     market = config["market"]
+    universe_config = get_universe_config(config["universe"])
     members = get_universe_members(config["universe"])
     benchmark = config.get("benchmark", {}).get("symbol")
     symbols = sorted(set(members + ([benchmark] if benchmark else [])))
@@ -55,6 +56,16 @@ def run_backtest(config_path: str | Path) -> tuple[pd.DataFrame, dict]:
         "run_id": run_id,
         "path": str(out_path),
         "config": config,
+        "strategy": strategy,
+        "costs": config.get("costs", {}),
+        "benchmark": config.get("benchmark", {}),
+        "universe": {
+            "name": config["universe"],
+            "membership_mode": universe_config.get("membership_mode"),
+            "provider": universe_config.get("provider"),
+            "member_count": len(members),
+        },
+        "adjust": sorted(strategy_prices["adjust"].dropna().astype(str).unique()),
         "snapshot_id": ",".join(
             sorted(strategy_prices["snapshot_id"].dropna().astype(str).unique())
         ),

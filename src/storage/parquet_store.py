@@ -47,6 +47,7 @@ class ParquetStore:
         symbols: list[str] | None = None,
         start: str | None = None,
         end: str | None = None,
+        deduplicate: bool = True,
     ) -> pd.DataFrame:
         glob_path = self._glob(self.prices_root, market)
         if not list(self.prices_root.glob(f"market={market or '*'}/date_month=*/*.parquet")):
@@ -64,7 +65,8 @@ class ParquetStore:
         if end and end != "latest":
             where.append("date <= ?")
             params.append(end)
-        query = f"""
+        if deduplicate:
+            query = f"""
             SELECT * EXCLUDE(rn)
             FROM (
                 SELECT *,
@@ -77,7 +79,14 @@ class ParquetStore:
             )
             WHERE rn = 1
             ORDER BY symbol, date
-        """
+            """
+        else:
+            query = f"""
+                SELECT *
+                FROM read_parquet('{glob_path}', union_by_name=true)
+                WHERE {' AND '.join(where)}
+                ORDER BY symbol, date, row_fetched_at
+            """
         return con.execute(query, params).fetch_df()
 
     def compact_prices(self, market: str | None = None) -> int:
@@ -89,12 +98,6 @@ class ParquetStore:
         if tmp_root.exists():
             shutil.rmtree(tmp_root)
         old_root = target_root.with_name(target_root.name + ".old")
-        local_store = ParquetStore(self.root)
-        original_root = local_store.prices_root
-        try:
-            local_store.prices_root_override = tmp_root
-        except Exception:
-            pass
         df["date_month"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m")
         for (row_market, date_month), group in df.groupby(["market", "date_month"], dropna=False):
             partition = tmp_root
@@ -106,11 +109,28 @@ class ParquetStore:
                 partition / f"part-compact-{uuid.uuid4().hex[:8]}.parquet",
                 index=False,
             )
-        if old_root.exists():
-            shutil.rmtree(old_root)
-        if target_root.exists():
-            target_root.rename(old_root)
-        tmp_root.rename(target_root)
+        tmp_glob = (
+            str(tmp_root / "date_month=*" / "*.parquet")
+            if market
+            else str(tmp_root / "market=*" / "date_month=*" / "*.parquet")
+        )
+        compacted = duckdb.connect().execute(
+            f"SELECT * FROM read_parquet('{tmp_glob}', union_by_name=true)"
+        ).fetch_df()
+        duplicated = compacted.duplicated(PRICE_KEYS, keep=False)
+        if len(compacted) != len(df) or duplicated.any():
+            shutil.rmtree(tmp_root, ignore_errors=True)
+            raise ValueError("Compacted prices failed validation")
+        try:
+            if old_root.exists():
+                shutil.rmtree(old_root)
+            if target_root.exists():
+                target_root.rename(old_root)
+            tmp_root.rename(target_root)
+        except Exception:
+            if not target_root.exists() and old_root.exists():
+                old_root.rename(target_root)
+            shutil.rmtree(tmp_root, ignore_errors=True)
+            raise
         shutil.rmtree(old_root, ignore_errors=True)
-        _ = original_root
         return len(df)

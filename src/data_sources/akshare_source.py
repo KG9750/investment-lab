@@ -5,6 +5,7 @@ import pandas as pd
 from src.data_sources.base import (
     PriceRequest,
     ProviderError,
+    classify_provider_exception,
     provider_symbol_for,
     resolve_adjust,
     standardize_price_frame,
@@ -18,7 +19,13 @@ class AKShareSource:
         try:
             import akshare as ak
         except ImportError as exc:
-            raise ProviderError("akshare is not installed", self.name, retryable=False) from exc
+            raise ProviderError(
+                "akshare is not installed",
+                self.name,
+                retryable=False,
+                error_type="missing_dependency",
+                symbol=request.symbol,
+            ) from exc
         adjust, provider_adjust = resolve_adjust(self.name, request.adjust)
         provider_symbol = provider_symbol_for(request.symbol, request.market, self.name)
         start = request.start.replace("-", "")
@@ -41,9 +48,23 @@ class AKShareSource:
                     adjust=provider_adjust,
                 )
             else:
-                raise ProviderError(f"AKShare does not handle market {request.market}", self.name)
+                raise ProviderError(
+                    f"AKShare does not handle market {request.market}",
+                    self.name,
+                    retryable=False,
+                    error_type="unsupported_market",
+                    symbol=request.symbol,
+                )
         except Exception as exc:
-            raise ProviderError(str(exc), self.name, retryable=True) from exc
+            if isinstance(exc, ProviderError):
+                raise
+            raise ProviderError(
+                str(exc),
+                self.name,
+                retryable=True,
+                error_type=classify_provider_exception(exc),
+                symbol=request.symbol,
+            ) from exc
         return standardize_price_frame(
             raw,
             request=request,

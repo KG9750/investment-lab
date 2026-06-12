@@ -42,12 +42,17 @@ def denormalize_symbol(unified: str, market: str, target_provider: str = "manual
     if market == "US":
         return value
     if market == "CN":
+        if provider == "baostock":
+            code, exchange = value.split(".")
+            return f"{exchange.lower()}.{code}"
+        if provider == "efinance":
+            return value.split(".")[0]
         if provider == "akshare":
             return value.split(".")[0]
         return value
     if market == "HK":
         digits = value.removesuffix(".HK").zfill(4)
-        if provider == "akshare":
+        if provider in {"akshare", "efinance"}:
             return digits.zfill(5)
         return f"{digits}.HK"
     return value

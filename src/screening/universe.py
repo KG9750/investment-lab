@@ -15,9 +15,4 @@ def get_universe_members(universe_key: str) -> list[str]:
     members = config.get("members")
     if members:
         return list(members)
-    seed = {
-        "沪深300": ["000001.SZ", "600000.SH", "000858.SZ", "600519.SH", "300750.SZ"],
-        "恒生科技": ["0700.HK", "9988.HK", "3690.HK", "1810.HK"],
-        "港股通": ["0700.HK", "9988.HK", "3690.HK", "0005.HK"],
-    }
-    return seed.get(universe_key, [])
+    return []

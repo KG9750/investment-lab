@@ -12,7 +12,7 @@ def run_price_quality_checks(
     snapshot_id: str | None = None,
     market: str | None = None,
 ) -> tuple[pd.DataFrame, Path | None]:
-    df = ParquetStore().read_prices(market=market)
+    df = ParquetStore().read_prices(market=market, deduplicate=False)
     if snapshot_id and not df.empty and "snapshot_id" in df.columns:
         df = df[df["snapshot_id"] == snapshot_id]
     report = check_price_frame(df, snapshot_id=snapshot_id, market=market)

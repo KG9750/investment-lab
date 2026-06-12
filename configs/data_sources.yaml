@@ -16,6 +16,15 @@ yfinance:
   batch_size: 20
   max_concurrency: 2
 
+baostock:
+  enabled: true
+  request_interval_ms: 800
+  timeout_seconds: 20
+  max_retries: 2
+  retry_backoff: exponential
+  batch_size: 1
+  max_concurrency: 1
+
 openbb:
   enabled: false
   request_interval_ms: 1000
@@ -26,6 +35,15 @@ openbb:
   max_concurrency: 1
 
 efinance:
+  enabled: true
+  request_interval_ms: 800
+  timeout_seconds: 20
+  max_retries: 2
+  retry_backoff: exponential
+  batch_size: 1
+  max_concurrency: 1
+
+tushare:
   enabled: false
   request_interval_ms: 800
   timeout_seconds: 20
