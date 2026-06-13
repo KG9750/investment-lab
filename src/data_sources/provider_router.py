@@ -30,6 +30,7 @@ class ProviderAttempt:
     retryable: bool = False
     fallback_reason: str | None = None
     proxy_mode: str = "env"
+    attempt_number: int = 1
 
 
 class ProviderRouter:
@@ -67,13 +68,13 @@ class ProviderRouter:
                 if failed_providers
                 else None
             )
-            df, attempt = self.get_price_from_provider(
+            df, provider_attempts = self.get_price_from_provider_attempts(
                 provider,
                 request,
                 fallback_reason=fallback_reason,
             )
-            attempts.append(attempt)
-            if attempt.ok:
+            attempts.extend(provider_attempts)
+            if provider_attempts and provider_attempts[-1].ok:
                 return df, attempts
             failed_providers.append(provider)
         return pd.DataFrame(), attempts
@@ -85,18 +86,64 @@ class ProviderRouter:
         *,
         fallback_reason: str | None = None,
     ) -> tuple[pd.DataFrame, ProviderAttempt]:
+        df, attempts = self.get_price_from_provider_attempts(
+            provider,
+            request,
+            fallback_reason=fallback_reason,
+        )
+        return df, attempts[-1]
+
+    def get_price_from_provider_attempts(
+        self,
+        provider: str,
+        request: PriceRequest,
+        *,
+        fallback_reason: str | None = None,
+    ) -> tuple[pd.DataFrame, list[ProviderAttempt]]:
         source = self.sources.get(provider)
         if source is None:
-            return pd.DataFrame(), ProviderAttempt(
-                provider=provider,
-                ok=False,
-                message="provider is not implemented",
-                error_type="not_implemented",
-                symbol=request.symbol,
-                retryable=False,
-                fallback_reason=fallback_reason,
-            )
+            return pd.DataFrame(), [
+                ProviderAttempt(
+                    provider=provider,
+                    ok=False,
+                    message="provider is not implemented",
+                    error_type="not_implemented",
+                    symbol=request.symbol,
+                    retryable=False,
+                    fallback_reason=fallback_reason,
+                )
+            ]
         provider_settings = self.settings.get(provider, {})
+        max_retries = max(0, int(provider_settings.get("max_retries", 0) or 0))
+        attempts: list[ProviderAttempt] = []
+        for attempt_number in range(1, max_retries + 2):
+            df, attempt = self._attempt_provider_once(
+                provider=provider,
+                source=source,
+                request=request,
+                provider_settings=provider_settings,
+                fallback_reason=fallback_reason,
+                attempt_number=attempt_number,
+            )
+            attempts.append(attempt)
+            if attempt.ok:
+                return df, attempts
+            if not attempt.retryable:
+                return pd.DataFrame(), attempts
+            if attempt_number <= max_retries:
+                sleep_ms(self._retry_delay_ms(provider_settings, attempt_number))
+        return pd.DataFrame(), attempts
+
+    def _attempt_provider_once(
+        self,
+        *,
+        provider: str,
+        source,
+        request: PriceRequest,
+        provider_settings: dict[str, Any],
+        fallback_reason: str | None,
+        attempt_number: int,
+    ) -> tuple[pd.DataFrame, ProviderAttempt]:
         sleep_ms(int(provider_settings.get("request_interval_ms", 0)))
         proxy_mode = self._proxy_mode_for(provider)
         timeout_seconds = (
@@ -122,6 +169,7 @@ class ProviderRouter:
                     elapsed_ms=elapsed_ms,
                     fallback_reason=fallback_reason,
                     proxy_mode=proxy_mode,
+                    attempt_number=attempt_number,
                 )
             return pd.DataFrame(), ProviderAttempt(
                 provider=provider,
@@ -133,6 +181,7 @@ class ProviderRouter:
                 retryable=True,
                 fallback_reason=fallback_reason,
                 proxy_mode=proxy_mode,
+                attempt_number=attempt_number,
             )
         except ProviderError as exc:
             elapsed_ms = int((time.perf_counter() - started) * 1000)
@@ -146,6 +195,7 @@ class ProviderRouter:
                 retryable=exc.retryable,
                 fallback_reason=fallback_reason,
                 proxy_mode=proxy_mode,
+                attempt_number=attempt_number,
             )
 
     def summary(self, attempts: list[ProviderAttempt]) -> dict[str, Any]:
@@ -161,6 +211,7 @@ class ProviderRouter:
                     "retryable": item.retryable,
                     "fallback_reason": item.fallback_reason,
                     "proxy_mode": item.proxy_mode,
+                    "attempt_number": item.attempt_number,
                 }
                 for item in attempts
             ]
@@ -171,6 +222,14 @@ class ProviderRouter:
         if mode not in {"env", "direct"}:
             return "env"
         return mode
+
+    def _retry_delay_ms(self, provider_settings: dict[str, Any], attempt_number: int) -> int:
+        base = int(provider_settings.get("request_interval_ms", 0) or 0)
+        if base <= 0:
+            return 0
+        if provider_settings.get("retry_backoff") == "exponential":
+            return base * (2 ** (attempt_number - 1))
+        return base
 
 
 PROXY_ENV_KEYS = [

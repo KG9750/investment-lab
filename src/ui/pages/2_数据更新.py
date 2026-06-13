@@ -116,6 +116,27 @@ if st.button("检查本地增量状态"):
         )
         status_band(result.json_summary)
         if result.json_summary:
+            metric_cols = st.columns(5)
+            metric_cols[0].metric(
+                "研究可用",
+                result.json_summary.get("research_ready_symbol_count", 0),
+            )
+            metric_cols[1].metric(
+                "过期",
+                result.json_summary.get("stale_symbol_count", 0),
+            )
+            metric_cols[2].metric(
+                "仅模拟",
+                result.json_summary.get("synthetic_only_symbol_count", 0),
+            )
+            metric_cols[3].metric(
+                "缺失",
+                result.json_summary.get("missing_symbol_count", 0),
+            )
+            metric_cols[4].metric(
+                "混合来源",
+                result.json_summary.get("mixed_provider_symbol_count", 0),
+            )
             status_rows = pd.DataFrame(result.json_summary.get("symbols", []))
             if not status_rows.empty:
                 st.dataframe(localize_table(status_rows), width="stretch", hide_index=True)

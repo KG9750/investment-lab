@@ -3,11 +3,13 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from src.ui.chrome import inject_workbench_css, localize_table, page_header, render_empty
+from src.ui.cli_bridge import build_data_status_args, run_cli
 from src.ui.state import (
     recent_cross_provider_checks,
     recent_provider_health,
@@ -49,6 +51,22 @@ provider_cols[3].metric(
     if not runs.empty and "provider_summary" in runs
     else 0,
 )
+
+st.subheader("数据可用性")
+if st.button("检查 CN_REAL_CORE"):
+    result = run_cli(build_data_status_args(market="CN", universe="CN_REAL_CORE"))
+    if result.json_summary:
+        cols = st.columns(5)
+        cols[0].metric("研究可用", result.json_summary.get("research_ready_symbol_count", 0))
+        cols[1].metric("过期", result.json_summary.get("stale_symbol_count", 0))
+        cols[2].metric("仅模拟", result.json_summary.get("synthetic_only_symbol_count", 0))
+        cols[3].metric("缺失", result.json_summary.get("missing_symbol_count", 0))
+        cols[4].metric("混合来源", result.json_summary.get("mixed_provider_symbol_count", 0))
+        status_rows = pd.DataFrame(result.json_summary.get("symbols", []))
+        if not status_rows.empty:
+            st.dataframe(localize_table(status_rows), width="stretch", hide_index=True)
+    else:
+        st.error(result.stderr or result.stdout or "data-status 未返回 JSON。")
 
 st.subheader("数据快照")
 if snapshots.empty:

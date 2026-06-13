@@ -45,7 +45,7 @@ uv run python -m src.cli ui
 
 所有非 UI 命令支持 `--output text` 和 `--output json`。失败时也会输出 JSON summary，并返回非零退出码。
 
-`data-status` 用来查看本地标的覆盖、最新日期、下一交易日增量起点、provider 和 snapshot；`provider-health` 用来检查数据源可用性、耗时、错误类型和可重试状态；`cross-provider-check` 用来比较不同数据源之间的行数、缺失日期、OHLC 合法性和 close 差异。后者不判断哪个数据源是真值，只提示差异。
+`data-status` 用来查看本地标的覆盖、真实/模拟数据行数、最新真实日期、下一交易日增量起点、provider 和 snapshot。`available_symbol_count` 只表示本地有任意数据；`research_ready_symbol_count` 才表示真实且未过期、可用于研究的标的数。`provider-health` 用来检查数据源可用性、耗时、错误类型和可重试状态；`cross-provider-check` 用来比较不同数据源之间的行数、缺失日期、OHLC 合法性和 close 差异。后者不判断哪个数据源是真值，只提示差异。
 
 `--proxy-mode env|direct` 可临时覆盖数据源网络模式：
 
@@ -73,6 +73,7 @@ uv run python -m src.cli ui
 
 免费数据源可能限频、延迟或字段变化；每次抓取会记录 provider attempt 和质量事件，供报告追溯。
 本机网络或代理异常时，健康检查会返回 `proxy_error`、`timeout`、`empty_response` 等结构化错误。
+`configs/data_sources.yaml` 中的 `max_retries` / `retry_backoff` 会在同一 provider 内生效；同源重试全部失败后才 fallback 到下一个 provider，每次尝试都会记录在 provider attempts 中。
 
 ## UI
 
@@ -146,6 +147,8 @@ uv run python -m src.cli update-data --market CN --universe CN_REAL_CORE --start
 ```
 
 免费源可能出现限频、空响应或代理错误；严格模式下只要有标的失败就会返回非零退出码，但已成功标的仍会落地，并可通过 `data-status` 继续查看缺口和下一次增量起点。
+
+`trend_cn_real_core` 和 `ma_cross_cn_real_core` 使用 `quality_policy: real_research`。如果核心池存在缺失、仅模拟数据、过期数据或真实覆盖率不足，筛选/回测会阻断并返回非零退出码；这是防止脏数据进入研究结果的门禁，不是静默失败。
 
 ## Limitations
 

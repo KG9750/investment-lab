@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import shutil
 import uuid
+from datetime import timedelta
 from pathlib import Path
 
 import duckdb
 import pandas as pd
 
-from src.calendars import next_trading_day
+from src.calendars import next_trading_day, previous_trading_day
 from src.config import DATA_DIR, ensure_data_dirs
 
 PRICE_KEYS = ["market", "symbol", "date", "adjust", "provider"]
@@ -20,6 +21,16 @@ def next_resume_start(market: str, latest_date) -> str:
         return next_trading_day(market, latest).isoformat()
     except Exception:
         return (pd.Timestamp(latest) + pd.Timedelta(days=1)).date().isoformat()
+
+
+def expected_latest_trading_day(market: str) -> object | None:
+    try:
+        return previous_trading_day(
+            market,
+            pd.Timestamp.now(tz="UTC").date() + timedelta(days=1),
+        )
+    except Exception:
+        return None
 
 
 class ParquetStore:
@@ -167,46 +178,87 @@ def price_status(
     market: str,
     requested_symbols: list[str],
 ) -> list[dict]:
+    empty_row = _empty_price_status_row
     if prices.empty:
-        return [
-            {
-                "market": market,
-                "symbol": symbol,
-                "row_count": 0,
-                "latest_date": None,
-                "resume_start": None,
-                "providers": [],
-                "snapshot_ids": [],
-            }
-            for symbol in requested_symbols
-        ]
-    df = canonicalize_prices(prices)
+        return [empty_row(market, symbol) for symbol in requested_symbols]
+    raw = prices.copy()
+    raw["date"] = pd.to_datetime(raw["date"]).dt.date
+    df = canonicalize_prices(raw)
+    expected_latest = expected_latest_trading_day(market)
     rows: list[dict] = []
     for symbol in requested_symbols:
         group = df[df["symbol"] == symbol]
         if group.empty:
-            rows.append(
-                {
-                    "market": market,
-                    "symbol": symbol,
-                    "row_count": 0,
-                    "latest_date": None,
-                    "resume_start": None,
-                    "providers": [],
-                    "snapshot_ids": [],
-                }
-            )
+            rows.append(empty_row(market, symbol))
             continue
         latest = pd.to_datetime(group["date"]).max().date()
+        real = group[group["provider"].astype(str) != "synthetic"]
+        synthetic = group[group["provider"].astype(str) == "synthetic"]
+        latest_real = pd.to_datetime(real["date"]).max().date() if not real.empty else None
+        latest_synthetic = (
+            pd.to_datetime(synthetic["date"]).max().date() if not synthetic.empty else None
+        )
+        raw_symbol = raw[raw["symbol"] == symbol]
+        mixed_provider = raw_symbol.groupby("date")["provider"].nunique()
+        is_mixed_provider = bool((mixed_provider > 1).any())
+        is_real_available = latest_real is not None
+        is_synthetic_only = bool(group["provider"].astype(str).eq("synthetic").all())
+        is_stale = bool(
+            latest_real is not None
+            and expected_latest is not None
+            and latest_real < expected_latest
+        )
+        if is_synthetic_only:
+            status = "synthetic_only"
+        elif is_stale:
+            status = "stale"
+        elif is_mixed_provider:
+            status = "mixed_provider"
+        elif is_real_available:
+            status = "ready"
+        else:
+            status = "missing"
         rows.append(
             {
                 "market": market,
                 "symbol": symbol,
                 "row_count": int(len(group)),
+                "real_row_count": int(len(real)),
+                "synthetic_row_count": int(len(synthetic)),
                 "latest_date": latest.isoformat(),
+                "latest_real_date": latest_real.isoformat() if latest_real else None,
+                "latest_synthetic_date": (
+                    latest_synthetic.isoformat() if latest_synthetic else None
+                ),
                 "resume_start": next_resume_start(market, latest),
                 "providers": sorted(group["provider"].dropna().astype(str).unique().tolist()),
                 "snapshot_ids": sorted(group["snapshot_id"].dropna().astype(str).unique().tolist()),
+                "is_real_available": is_real_available,
+                "is_synthetic_only": is_synthetic_only,
+                "is_stale": is_stale,
+                "is_mixed_provider": is_mixed_provider,
+                "status": status,
             }
         )
     return rows
+
+
+def _empty_price_status_row(market: str, symbol: str) -> dict:
+    return {
+        "market": market,
+        "symbol": symbol,
+        "row_count": 0,
+        "real_row_count": 0,
+        "synthetic_row_count": 0,
+        "latest_date": None,
+        "latest_real_date": None,
+        "latest_synthetic_date": None,
+        "resume_start": None,
+        "providers": [],
+        "snapshot_ids": [],
+        "is_real_available": False,
+        "is_synthetic_only": False,
+        "is_stale": False,
+        "is_mixed_provider": False,
+        "status": "missing",
+    }

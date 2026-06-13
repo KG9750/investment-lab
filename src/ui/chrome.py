@@ -51,7 +51,19 @@ COLUMN_LABELS = {
     "providers": "数据源",
     "snapshot_ids": "快照",
     "available_symbol_count": "有数据标的数",
+    "research_ready_symbol_count": "研究可用标的数",
     "missing_symbol_count": "缺失标的数",
+    "stale_symbol_count": "过期标的数",
+    "synthetic_only_symbol_count": "仅模拟数据标的数",
+    "mixed_provider_symbol_count": "混合来源标的数",
+    "real_row_count": "真实数据行数",
+    "synthetic_row_count": "模拟数据行数",
+    "latest_real_date": "最新真实日期",
+    "latest_synthetic_date": "最新模拟日期",
+    "is_real_available": "有真实数据",
+    "is_synthetic_only": "仅模拟数据",
+    "is_stale": "数据过期",
+    "is_mixed_provider": "混合来源",
 }
 
 

@@ -1,6 +1,6 @@
-name: trend_cn_real_mini
+name: trend_cn_real_core
 market: CN
-universe: CN_REAL_MINI
+universe: CN_REAL_CORE
 allow_synthetic: false
 quality_policy: real_research
 max_stale_symbols: 0
@@ -16,4 +16,4 @@ filters:
 sort:
   - field: momentum_60d
     direction: desc
-limit: 10
+limit: 20

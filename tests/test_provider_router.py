@@ -63,6 +63,59 @@ def test_provider_attempt_records_fallback_metadata() -> None:
     assert payload[1]["elapsed_ms"] >= 0
 
 
+def test_provider_retries_same_provider_before_fallback() -> None:
+    class FlakySource:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def get_price(self, request: PriceRequest) -> pd.DataFrame:
+            self.calls += 1
+            if self.calls == 1:
+                raise ProviderError(
+                    "rate limited",
+                    "flaky",
+                    retryable=True,
+                    error_type="rate_limited",
+                    symbol=request.symbol,
+                )
+            raw = pd.DataFrame(
+                {
+                    "Date": ["2024-01-02"],
+                    "Open": [10],
+                    "High": [11],
+                    "Low": [9],
+                    "Close": [10.5],
+                    "Volume": [100],
+                }
+            )
+            return standardize_price_frame(
+                raw,
+                request=request,
+                provider="flaky",
+                provider_symbol="SPY",
+                adjust="raw",
+            )
+
+    router = ProviderRouter()
+    source = FlakySource()
+    router.priority = {"US": {"price": ["flaky", "fallback"]}}
+    router.settings = {
+        "flaky": {"enabled": True, "max_retries": 1, "request_interval_ms": 0},
+        "fallback": {"enabled": True},
+    }
+    router.sources = {"flaky": source}
+
+    df, attempts = router.get_price(PriceRequest("SPY", "US", "2024-01-01"))
+    payload = router.summary(attempts)["attempts"]
+
+    assert not df.empty
+    assert source.calls == 2
+    assert [item["provider"] for item in payload] == ["flaky", "flaky"]
+    assert [item["attempt_number"] for item in payload] == [1, 2]
+    assert payload[0]["error_type"] == "rate_limited"
+    assert payload[1]["ok"] is True
+
+
 def test_direct_proxy_mode_clears_proxy_env(monkeypatch) -> None:
     class EnvSource:
         def get_price(self, request: PriceRequest) -> pd.DataFrame:

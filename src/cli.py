@@ -107,6 +107,39 @@ def _event(
     }
 
 
+def _quality_report_events(
+    report: pd.DataFrame,
+    *,
+    run_id: str,
+    snapshot_id: str | None,
+    market: str | None,
+) -> list[dict[str, Any]]:
+    if report.empty:
+        return []
+    events: list[dict[str, Any]] = []
+    for row in report.to_dict("records"):
+        check_type = str(row.get("check_type"))
+        affected_rows = row.get("affected_rows")
+        events.append(
+            _event(
+                run_id=run_id,
+                snapshot_id=row.get("snapshot_id") or snapshot_id,
+                market=row.get("market") or market,
+                symbol=row.get("symbol"),
+                event_type=check_type,
+                severity=str(row.get("severity") or "warning"),
+                message=str(row.get("message") or check_type),
+                retryable=False,
+                details={
+                    "affected_rows": affected_rows,
+                    "check_type": check_type,
+                    "source": "data_quality",
+                },
+            )
+        )
+    return events
+
+
 def _emit(summary: dict[str, Any], output: str, exit_code: int = 0) -> None:
     summary["finished_at"] = summary.get("finished_at") or utc_now_str()
     if output == "json":
@@ -147,6 +180,27 @@ def _providers_for_targets(
     return targets
 
 
+def _get_provider_attempts(
+    router: Any,
+    provider: str,
+    request: PriceRequest,
+    *,
+    fallback_reason: str | None = None,
+) -> tuple[pd.DataFrame, list[Any]]:
+    if hasattr(router, "get_price_from_provider_attempts"):
+        return router.get_price_from_provider_attempts(
+            provider,
+            request,
+            fallback_reason=fallback_reason,
+        )
+    df, attempt = router.get_price_from_provider(
+        provider,
+        request,
+        fallback_reason=fallback_reason,
+    )
+    return df, [attempt]
+
+
 def _attempt_to_event_details(attempt: dict[str, Any]) -> dict[str, Any]:
     return {
         "ok": attempt.get("ok"),
@@ -154,6 +208,7 @@ def _attempt_to_event_details(attempt: dict[str, Any]) -> dict[str, Any]:
         "elapsed_ms": attempt.get("elapsed_ms"),
         "fallback_reason": attempt.get("fallback_reason"),
         "proxy_mode": attempt.get("proxy_mode"),
+        "attempt_number": attempt.get("attempt_number"),
     }
 
 
@@ -293,12 +348,13 @@ def _cross_provider_findings(
 
 def _fail(summary: dict[str, Any], exc: Exception, output: str) -> None:
     summary["status"] = "error"
+    summary["run_id"] = summary.get("run_id") or make_run_id(summary["task"], None, "failed")
     summary["blocking_error_count"] = max(int(summary.get("blocking_error_count", 0)), 1)
     summary["errors"].append(_error(type(exc).__name__, str(exc)))
     try:
         record_run(
             {
-                "run_id": summary.get("run_id") or make_run_id(summary["task"], None, "failed"),
+                "run_id": summary["run_id"],
                 "task": summary["task"],
                 "config_hash": summary.get("config_hash"),
                 "snapshot_id": summary.get("snapshot_id"),
@@ -415,6 +471,14 @@ def update_data(
         prices = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
         written = store.write_prices(prices, market)
         quality, _ = run_price_quality_checks(snapshot_id=snapshot_id, market=market)
+        events.extend(
+            _quality_report_events(
+                quality,
+                run_id=run_id,
+                snapshot_id=snapshot_id,
+                market=market,
+            )
+        )
         warnings = int((quality["severity"] == "warning").sum()) if not quality.empty else 0
         quality_blocking = (
             int((quality["severity"] == "blocking").sum()) if not quality.empty else 0
@@ -547,6 +611,14 @@ def data_quality(
                     snapshot_id=snapshot_id,
                 )
             )
+        record_quality_events(
+            _quality_report_events(
+                report,
+                run_id=run_id,
+                snapshot_id=snapshot_id,
+                market=market,
+            )
+        )
         record_run(
             {
                 "run_id": run_id,
@@ -584,12 +656,21 @@ def data_status(
         prices = ParquetStore().read_prices(market=market, symbols=requested)
         rows = price_status(prices, market=market, requested_symbols=requested)
         available = sum(1 for row in rows if row["row_count"] > 0)
+        research_ready = sum(1 for row in rows if row["status"] == "ready")
         summary.update(
             {
                 "row_count": int(sum(row["row_count"] for row in rows)),
                 "symbol_count": len(rows),
                 "available_symbol_count": available,
+                "research_ready_symbol_count": research_ready,
                 "missing_symbol_count": len(rows) - available,
+                "stale_symbol_count": sum(1 for row in rows if row["status"] == "stale"),
+                "synthetic_only_symbol_count": sum(
+                    1 for row in rows if row["status"] == "synthetic_only"
+                ),
+                "mixed_provider_symbol_count": sum(
+                    1 for row in rows if row["status"] == "mixed_provider"
+                ),
                 "symbols": rows,
             }
         )
@@ -651,24 +732,25 @@ def provider_health(
                     "provider_default",
                     timeout_seconds=5,
                 )
-                _, attempt = router.get_price_from_provider(target_provider, request)
-                attempt_row = router.summary([attempt])["attempts"][0]
-                attempt_row["market"] = target_market
-                attempts.append(attempt_row)
-                events.append(
-                    _event(
-                        run_id=run_id,
-                        snapshot_id=None,
-                        market=target_market,
-                        symbol=unified,
-                        provider=target_provider,
-                        event_type="provider_health",
-                        severity="info" if attempt.ok else "warning",
-                        message=attempt.message or ("ok" if attempt.ok else "failed"),
-                        retryable=attempt.retryable,
-                        details=_attempt_to_event_details(attempt_row),
+                _, provider_attempts = _get_provider_attempts(router, target_provider, request)
+                for attempt in provider_attempts:
+                    attempt_row = router.summary([attempt])["attempts"][0]
+                    attempt_row["market"] = target_market
+                    attempts.append(attempt_row)
+                    events.append(
+                        _event(
+                            run_id=run_id,
+                            snapshot_id=None,
+                            market=target_market,
+                            symbol=unified,
+                            provider=target_provider,
+                            event_type="provider_health",
+                            severity="info" if attempt.ok else "warning",
+                            message=attempt.message or ("ok" if attempt.ok else "failed"),
+                            retryable=attempt.retryable,
+                            details=_attempt_to_event_details(attempt_row),
+                        )
                     )
-                )
 
         ok_count = sum(1 for attempt in attempts if attempt.get("ok"))
         failed_count = len(attempts) - ok_count
@@ -765,27 +847,28 @@ def cross_provider_check(
                     "provider_default",
                     timeout_seconds=8,
                 )
-                df, attempt = router.get_price_from_provider(provider, request)
-                attempt_row = router.summary([attempt])["attempts"][0]
-                attempt_row["market"] = market
-                attempts.append(attempt_row)
-                events.append(
-                    _event(
-                        run_id=run_id,
-                        snapshot_id=None,
-                        market=market,
-                        symbol=unified,
-                        provider=provider,
-                        event_type="cross_provider_check",
-                        severity="info" if attempt.ok else "warning",
-                        message=attempt.message or ("ok" if attempt.ok else "failed"),
-                        retryable=attempt.retryable,
-                        details={
-                            "category": "provider_attempt",
-                            **_attempt_to_event_details(attempt_row),
-                        },
+                df, provider_attempts = _get_provider_attempts(router, provider, request)
+                for attempt in provider_attempts:
+                    attempt_row = router.summary([attempt])["attempts"][0]
+                    attempt_row["market"] = market
+                    attempts.append(attempt_row)
+                    events.append(
+                        _event(
+                            run_id=run_id,
+                            snapshot_id=None,
+                            market=market,
+                            symbol=unified,
+                            provider=provider,
+                            event_type="cross_provider_check",
+                            severity="info" if attempt.ok else "warning",
+                            message=attempt.message or ("ok" if attempt.ok else "failed"),
+                            retryable=attempt.retryable,
+                            details={
+                                "category": "provider_attempt",
+                                **_attempt_to_event_details(attempt_row),
+                            },
+                        )
                     )
-                )
                 if not df.empty:
                     frames.append(df)
             symbol_findings = _cross_provider_findings(
@@ -858,7 +941,13 @@ def screen(
     summary = _base_summary("screen")
     try:
         cfg = load_yaml(config)
-        summary.update({"config_hash": config_hash(cfg), "market": cfg.get("market")})
+        summary.update(
+            {
+                "run_id": make_run_id("screen", cfg.get("market"), cfg.get("name"), cfg),
+                "config_hash": config_hash(cfg),
+                "market": cfg.get("market"),
+            }
+        )
         result, meta = run_screen(config)
         summary.update(
             {
@@ -899,7 +988,13 @@ def backtest(
     summary = _base_summary("backtest")
     try:
         cfg = load_yaml(config)
-        summary.update({"config_hash": config_hash(cfg), "market": cfg.get("market")})
+        summary.update(
+            {
+                "run_id": make_run_id("backtest", cfg.get("market"), cfg.get("name"), cfg),
+                "config_hash": config_hash(cfg),
+                "market": cfg.get("market"),
+            }
+        )
         result, meta = run_backtest(config)
         html = None
         returns = pd.Series(

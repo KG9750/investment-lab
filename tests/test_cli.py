@@ -69,6 +69,62 @@ def test_data_quality_persists_errors() -> None:
     assert json.loads(stored)
 
 
+def test_data_quality_records_check_events(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("src.storage.parquet_store.DATA_DIR", tmp_path)
+    monkeypatch.setattr("src.data_quality.checks.DATA_DIR", tmp_path)
+    store = ParquetStore()
+    store.write_prices(
+        pd.DataFrame(
+            [
+                {
+                    "symbol": "SPY",
+                    "provider_symbol": "SPY",
+                    "market": "US",
+                    "date": "2024-01-02",
+                    "open": 1,
+                    "high": 0,
+                    "low": 1,
+                    "close": 2,
+                    "volume": 100,
+                    "amount": 0,
+                    "adjust": "auto_adjusted",
+                    "currency": "USD",
+                    "provider": "test",
+                    "row_fetched_at": "2024-01-02T00:00:00Z",
+                    "snapshot_id": "quality_event_test",
+                }
+            ]
+        ),
+        "US",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "data-quality",
+            "--snapshot-id",
+            "quality_event_test",
+            "--market",
+            "US",
+            "--output",
+            "json",
+        ],
+    )
+    payload = json.loads(result.stdout.strip().splitlines()[-1])
+
+    assert result.exit_code != 0
+    with connect() as con:
+        row = con.execute(
+            """
+            SELECT event_type, severity
+            FROM data_quality_events
+            WHERE run_id = ?
+            """,
+            [payload["run_id"]],
+        ).fetchone()
+    assert row == ("invalid_ohlc", "blocking")
+
+
 def test_update_data_strict_records_symbol_failure_event() -> None:
     proc = subprocess.run(
         [
@@ -110,6 +166,10 @@ def test_update_data_strict_records_symbol_failure_event() -> None:
 
 def test_data_status_reports_resume_start(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("src.storage.parquet_store.DATA_DIR", tmp_path)
+    monkeypatch.setattr(
+        "src.storage.parquet_store.expected_latest_trading_day",
+        lambda market: pd.Timestamp("2024-01-05").date(),
+    )
     store = ParquetStore()
     store.write_prices(
         pd.DataFrame(
@@ -144,6 +204,7 @@ def test_data_status_reports_resume_start(tmp_path, monkeypatch) -> None:
 
     assert result.exit_code == 0
     assert payload["available_symbol_count"] == 1
+    assert payload["research_ready_symbol_count"] == 1
     assert payload["missing_symbol_count"] == 1
     assert payload["symbols"][0]["resume_start"] == "2024-01-08"
 

@@ -6,6 +6,7 @@ import pandas as pd
 
 from src.config import DATA_DIR, load_yaml
 from src.data_quality.checks import check_price_frame
+from src.data_quality.policy import prepare_research_prices
 from src.factors.combined import add_phase_one_factors
 from src.indicators import add_indicators
 from src.screening.rules import apply_filter, enrich_rule_fields
@@ -22,8 +23,12 @@ def run_screen(config_path: str | Path) -> tuple[pd.DataFrame, dict]:
     if prices.empty:
         raise ValueError(f"No local price data found for screen {config['name']} market={market}")
     prices = canonicalize_prices(prices)
-    if config.get("allow_synthetic") is False:
-        prices = prices[prices["provider"].astype(str) != "synthetic"].copy()
+    prices, quality_policy = prepare_research_prices(
+        prices,
+        market=market,
+        requested_symbols=members,
+        config=config,
+    )
     quality = check_price_frame(prices, market=market)
     blocking = quality[quality["severity"] == "blocking"] if not quality.empty else quality
     if not blocking.empty:
@@ -46,5 +51,11 @@ def run_screen(config_path: str | Path) -> tuple[pd.DataFrame, dict]:
     out_path = DATA_DIR / "screens" / f"{config['name']}_{run_id}.parquet"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     latest.to_parquet(out_path, index=False)
-    meta = {"run_id": run_id, "path": str(out_path), "row_count": len(latest), "config": config}
+    meta = {
+        "run_id": run_id,
+        "path": str(out_path),
+        "row_count": len(latest),
+        "config": config,
+        "quality_policy": quality_policy,
+    }
     return latest, meta

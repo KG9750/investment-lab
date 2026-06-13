@@ -6,6 +6,8 @@ import pandas as pd
 
 from src.backtest.strategies import etf_rotation_returns, ma_cross_returns
 from src.config import DATA_DIR, load_yaml
+from src.data_quality.checks import check_price_frame
+from src.data_quality.policy import prepare_research_prices
 from src.screening.universe import get_universe_config, get_universe_members
 from src.storage.metadata import make_run_id
 from src.storage.parquet_store import ParquetStore, canonicalize_prices
@@ -27,8 +29,17 @@ def run_backtest(config_path: str | Path) -> tuple[pd.DataFrame, dict]:
     if prices.empty:
         raise ValueError(f"No local price data found for backtest {config['name']} market={market}")
     prices = canonicalize_prices(prices)
-    if config.get("allow_synthetic") is False:
-        prices = prices[prices["provider"].astype(str) != "synthetic"].copy()
+    prices, quality_policy = prepare_research_prices(
+        prices,
+        market=market,
+        requested_symbols=members,
+        config=config,
+    )
+    quality = check_price_frame(prices[prices["symbol"].isin(members)].copy(), market=market)
+    blocking = quality[quality["severity"] == "blocking"] if not quality.empty else quality
+    if not blocking.empty:
+        checks = ", ".join(sorted(blocking["check_type"].unique()))
+        raise ValueError(f"Blocking data-quality checks failed before backtest: {checks}")
     strategy_prices = prices[prices["symbol"].isin(members)].copy()
     if strategy_prices.empty:
         raise ValueError(f"No strategy price data found for universe {config['universe']}")
@@ -85,6 +96,7 @@ def run_backtest(config_path: str | Path) -> tuple[pd.DataFrame, dict]:
             "symbols": sorted(strategy_prices["symbol"].dropna().astype(str).unique()),
             "benchmark": benchmark,
         },
+        "quality_policy": quality_policy,
         **stats,
     }
     return result, meta
