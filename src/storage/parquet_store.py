@@ -7,10 +7,19 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
+from src.calendars import next_trading_day
 from src.config import DATA_DIR, ensure_data_dirs
 
 PRICE_KEYS = ["market", "symbol", "date", "adjust", "provider"]
 CANONICAL_PRICE_KEYS = ["market", "symbol", "date"]
+
+
+def next_resume_start(market: str, latest_date) -> str:
+    latest = pd.Timestamp(latest_date).date()
+    try:
+        return next_trading_day(market, latest).isoformat()
+    except Exception:
+        return (pd.Timestamp(latest) + pd.Timedelta(days=1)).date().isoformat()
 
 
 class ParquetStore:
@@ -150,3 +159,54 @@ def canonicalize_prices(prices: pd.DataFrame) -> pd.DataFrame:
         .sort_values(["symbol", "date"])
         .reset_index(drop=True)
     )
+
+
+def price_status(
+    prices: pd.DataFrame,
+    *,
+    market: str,
+    requested_symbols: list[str],
+) -> list[dict]:
+    if prices.empty:
+        return [
+            {
+                "market": market,
+                "symbol": symbol,
+                "row_count": 0,
+                "latest_date": None,
+                "resume_start": None,
+                "providers": [],
+                "snapshot_ids": [],
+            }
+            for symbol in requested_symbols
+        ]
+    df = canonicalize_prices(prices)
+    rows: list[dict] = []
+    for symbol in requested_symbols:
+        group = df[df["symbol"] == symbol]
+        if group.empty:
+            rows.append(
+                {
+                    "market": market,
+                    "symbol": symbol,
+                    "row_count": 0,
+                    "latest_date": None,
+                    "resume_start": None,
+                    "providers": [],
+                    "snapshot_ids": [],
+                }
+            )
+            continue
+        latest = pd.to_datetime(group["date"]).max().date()
+        rows.append(
+            {
+                "market": market,
+                "symbol": symbol,
+                "row_count": int(len(group)),
+                "latest_date": latest.isoformat(),
+                "resume_start": next_resume_start(market, latest),
+                "providers": sorted(group["provider"].dropna().astype(str).unique().tolist()),
+                "snapshot_ids": sorted(group["snapshot_id"].dropna().astype(str).unique().tolist()),
+            }
+        )
+    return rows

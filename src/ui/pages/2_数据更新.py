@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from src.config import load_yaml
 from src.ui.chrome import inject_workbench_css, localize_table, page_header, status_band
-from src.ui.cli_bridge import build_update_args, stream_cli
+from src.ui.cli_bridge import build_data_status_args, build_update_args, run_cli, stream_cli
 from src.ui.state import recent_provider_health
 
 
@@ -104,6 +104,24 @@ proxy_mode = st.selectbox(
     ["env", "direct"],
     help="env 使用当前代理环境；direct 临时直连。",
 )
+
+if st.button("检查本地增量状态"):
+    try:
+        status_args = build_data_status_args(market=market, symbols=symbols, universe=universe)
+        result = run_cli(status_args)
+        command = " ".join(["python", "-m", "src.cli", *status_args])
+        st.markdown(
+            f'<div class="command-strip">{command}</div>',
+            unsafe_allow_html=True,
+        )
+        status_band(result.json_summary)
+        if result.json_summary:
+            status_rows = pd.DataFrame(result.json_summary.get("symbols", []))
+            if not status_rows.empty:
+                st.dataframe(localize_table(status_rows), width="stretch", hide_index=True)
+    except Exception as exc:
+        st.error(str(exc))
+
 if st.button("运行更新"):
     try:
         args = build_update_args(

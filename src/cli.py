@@ -27,7 +27,7 @@ from src.storage.duckdb_client import (
     record_snapshot,
 )
 from src.storage.metadata import config_hash, make_run_id, make_snapshot_id, utc_now_str
-from src.storage.parquet_store import ParquetStore
+from src.storage.parquet_store import ParquetStore, next_resume_start, price_status
 from src.symbols.normalize import normalize_symbol
 
 app = typer.Typer(no_args_is_help=True)
@@ -566,6 +566,38 @@ def data_quality(
         _fail(summary, exc, output)
 
 
+@app.command("data-status")
+def data_status(
+    market: Annotated[str, typer.Option("--market")],
+    symbols: Annotated[str | None, typer.Option("--symbols")] = None,
+    universe: Annotated[str | None, typer.Option("--universe")] = None,
+    output: Annotated[str, typer.Option("--output")] = "text",
+) -> None:
+    run_id = make_run_id("data_status", market, symbols or universe or "manual")
+    summary = _base_summary("data-status", run_id)
+    summary.update({"market": market, "dataset": "prices"})
+    try:
+        requested = [
+            normalize_symbol(item, market, "manual")
+            for item in _resolve_symbols(symbols, universe)
+        ]
+        prices = ParquetStore().read_prices(market=market, symbols=requested)
+        rows = price_status(prices, market=market, requested_symbols=requested)
+        available = sum(1 for row in rows if row["row_count"] > 0)
+        summary.update(
+            {
+                "row_count": int(sum(row["row_count"] for row in rows)),
+                "symbol_count": len(rows),
+                "available_symbol_count": available,
+                "missing_symbol_count": len(rows) - available,
+                "symbols": rows,
+            }
+        )
+        _emit(summary, output)
+    except Exception as exc:
+        _fail(summary, exc, output)
+
+
 @app.command("provider-health")
 def provider_health(
     mode: Annotated[str, typer.Option("--mode")] = "quick",
@@ -992,7 +1024,7 @@ def _resume_start(store: ParquetStore, market: str, symbol: str, default_start: 
     if current.empty:
         return default_start
     max_date = pd.to_datetime(current["date"]).max().date()
-    return (pd.Timestamp(max_date) + pd.Timedelta(days=1)).date().isoformat()
+    return next_resume_start(market, max_date)
 
 
 if __name__ == "__main__":

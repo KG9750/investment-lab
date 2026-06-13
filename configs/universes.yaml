@@ -23,6 +23,22 @@ CN_REAL_MINI:
   members: [000001.SZ, 600000.SH, 000858.SZ]
   symbol_format: unified
 
+CN_REAL_CORE:
+  market: CN
+  type: watchlist
+  index_code: null
+  provider: manual
+  membership_mode: static
+  members: [
+    000001.SZ, 000002.SZ, 000063.SZ, 000333.SZ, 000568.SZ,
+    000651.SZ, 000725.SZ, 000776.SZ, 000858.SZ, 002027.SZ,
+    002142.SZ, 002230.SZ, 002304.SZ, 002415.SZ, 002475.SZ,
+    300015.SZ, 300059.SZ, 300122.SZ, 300274.SZ, 300750.SZ,
+    600000.SH, 600009.SH, 600030.SH, 600036.SH, 600276.SH,
+    600309.SH, 600519.SH, 600887.SH, 601318.SH, 601888.SH
+  ]
+  symbol_format: unified
+
 恒生科技:
   market: HK
   type: index

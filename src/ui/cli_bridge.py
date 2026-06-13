@@ -128,6 +128,23 @@ def build_provider_health_args(
     return args
 
 
+def build_data_status_args(
+    *,
+    market: str,
+    symbols: str | None = None,
+    universe: str | None = None,
+) -> list[str]:
+    args = ["data-status", "--market", market]
+    if universe:
+        args.extend(["--universe", universe])
+    elif symbols:
+        args.extend(["--symbols", symbols])
+    else:
+        raise ValueError("Either symbols or universe is required")
+    args.extend(["--output", "json"])
+    return args
+
+
 def build_cross_provider_args(
     *,
     market: str,

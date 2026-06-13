@@ -46,6 +46,12 @@ COLUMN_LABELS = {
     "last_message": "最近消息",
     "category": "类型",
     "diff_pct": "差异百分比",
+    "latest_date": "最新日期",
+    "resume_start": "增量起点",
+    "providers": "数据源",
+    "snapshot_ids": "快照",
+    "available_symbol_count": "有数据标的数",
+    "missing_symbol_count": "缺失标的数",
 }
 
 

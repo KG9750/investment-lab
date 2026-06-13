@@ -1,6 +1,7 @@
 from src.ui.cli_bridge import (
     _last_json,
     build_cross_provider_args,
+    build_data_status_args,
     build_provider_health_args,
     build_update_args,
 )
@@ -53,6 +54,20 @@ def test_build_provider_health_args_uses_json_output() -> None:
     assert args[args.index("--proxy-mode") + 1] == "direct"
     assert "--dry-run" in args
     assert args[-2:] == ["--output", "json"]
+
+
+def test_build_data_status_args_uses_cli_contract() -> None:
+    args = build_data_status_args(market="CN", universe="CN_REAL_CORE")
+
+    assert args == [
+        "data-status",
+        "--market",
+        "CN",
+        "--universe",
+        "CN_REAL_CORE",
+        "--output",
+        "json",
+    ]
 
 
 def test_build_cross_provider_args_uses_cli_contract() -> None:

@@ -10,6 +10,7 @@ from src.cli import app
 from src.data_sources.base import PriceRequest, standardize_price_frame
 from src.data_sources.provider_router import ProviderAttempt
 from src.storage.duckdb_client import connect
+from src.storage.parquet_store import ParquetStore
 
 runner = CliRunner()
 
@@ -105,6 +106,46 @@ def test_update_data_strict_records_symbol_failure_event() -> None:
             [payload["run_id"]],
         ).fetchone()
     assert row == ("symbol_normalization_failed", "blocking")
+
+
+def test_data_status_reports_resume_start(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("src.storage.parquet_store.DATA_DIR", tmp_path)
+    store = ParquetStore()
+    store.write_prices(
+        pd.DataFrame(
+            [
+                {
+                    "symbol": "SPY",
+                    "provider_symbol": "SPY",
+                    "market": "US",
+                    "date": "2024-01-05",
+                    "open": 1,
+                    "high": 2,
+                    "low": 1,
+                    "close": 2,
+                    "volume": 100,
+                    "amount": 0,
+                    "adjust": "auto_adjusted",
+                    "currency": "USD",
+                    "provider": "test",
+                    "row_fetched_at": "2024-01-02T00:00:00Z",
+                    "snapshot_id": "s1",
+                }
+            ]
+        ),
+        "US",
+    )
+
+    result = runner.invoke(
+        app,
+        ["data-status", "--market", "US", "--symbols", "SPY,QQQ", "--output", "json"],
+    )
+    payload = json.loads(result.stdout.strip().splitlines()[-1])
+
+    assert result.exit_code == 0
+    assert payload["available_symbol_count"] == 1
+    assert payload["missing_symbol_count"] == 1
+    assert payload["symbols"][0]["resume_start"] == "2024-01-08"
 
 
 def test_provider_health_records_structured_event(monkeypatch) -> None:

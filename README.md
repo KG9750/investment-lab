@@ -31,6 +31,7 @@ uv sync --extra vectorbt
 
 ```bash
 uv run python -m src.cli update-data --market US --symbols SPY,QQQ --start 2018-01-01 --resume --output json
+uv run python -m src.cli data-status --market CN --universe CN_REAL_CORE --output json
 uv run python -m src.cli data-quality --snapshot-id <snapshot-id> --output json
 uv run python -m src.cli screen --config configs/screens/us_momentum.yaml --output json
 uv run python -m src.cli backtest --config configs/backtests/etf_rotation_us.yaml --output json
@@ -44,7 +45,7 @@ uv run python -m src.cli ui
 
 所有非 UI 命令支持 `--output text` 和 `--output json`。失败时也会输出 JSON summary，并返回非零退出码。
 
-`provider-health` 用来检查数据源可用性、耗时、错误类型和可重试状态；`cross-provider-check` 用来比较不同数据源之间的行数、缺失日期、OHLC 合法性和 close 差异。后者不判断哪个数据源是真值，只提示差异。
+`data-status` 用来查看本地标的覆盖、最新日期、下一交易日增量起点、provider 和 snapshot；`provider-health` 用来检查数据源可用性、耗时、错误类型和可重试状态；`cross-provider-check` 用来比较不同数据源之间的行数、缺失日期、OHLC 合法性和 close 差异。后者不判断哪个数据源是真值，只提示差异。
 
 `--proxy-mode env|direct` 可临时覆盖数据源网络模式：
 
@@ -136,6 +137,15 @@ uv run python -m src.cli report --run-id <backtest-run-id> --output json
 ```
 
 该闭环配置为 `allow_synthetic: false`，筛选和回测会排除历史 synthetic 数据，只使用真实 provider 数据。
+
+扩展观察池 `CN_REAL_CORE` 包含 30 只常用 A 股标的，可先检查本地覆盖，再按需增量抓取：
+
+```bash
+uv run python -m src.cli data-status --market CN --universe CN_REAL_CORE --output json
+uv run python -m src.cli update-data --market CN --universe CN_REAL_CORE --start 2024-01-01 --resume --strict --output json
+```
+
+免费源可能出现限频、空响应或代理错误；严格模式下只要有标的失败就会返回非零退出码，但已成功标的仍会落地，并可通过 `data-status` 继续查看缺口和下一次增量起点。
 
 ## Limitations
 

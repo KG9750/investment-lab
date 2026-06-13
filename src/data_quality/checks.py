@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 import pandas as pd
 
+from src.calendars import get_trading_days, previous_trading_day
 from src.config import DATA_DIR
 from src.storage.parquet_store import ParquetStore
 
@@ -47,9 +49,18 @@ def check_price_frame(
             }
         )
     else:
+        df = df.copy()
+        df["date"] = pd.to_datetime(df["date"]).dt.date
         duplicated = df.duplicated(["market", "symbol", "date", "adjust", "provider"], keep=False)
         if duplicated.any():
             checks.append(_row(df, "duplicate_price", "blocking", int(duplicated.sum())))
+        mixed_provider = df.groupby(["market", "symbol", "date"])["provider"].nunique()
+        mixed_count = int((mixed_provider > 1).sum())
+        if mixed_count:
+            checks.append(_row(df, "mixed_provider_same_day", "warning", mixed_count))
+        synthetic = df["provider"].astype(str) == "synthetic"
+        if synthetic.any():
+            checks.append(_row(df, "synthetic_price_present", "warning", int(synthetic.sum())))
         invalid_price = (
             (df["open"] <= 0)
             | (df["high"] <= 0)
@@ -69,6 +80,12 @@ def check_price_frame(
         )
         if (zero_volume >= 20).any():
             checks.append(_row(df, "zero_volume_20d", "warning", int((zero_volume >= 20).sum())))
+        missing_count = _missing_trading_day_count(df, market or str(df["market"].iloc[-1]))
+        if missing_count:
+            checks.append(_row(df, "missing_trading_days", "warning", missing_count))
+        stale_count = _stale_symbol_count(df, market or str(df["market"].iloc[-1]))
+        if stale_count:
+            checks.append(_row(df, "stale_symbol", "warning", stale_count))
     return pd.DataFrame(checks)
 
 
@@ -84,3 +101,31 @@ def _row(df: pd.DataFrame, check_type: str, severity: str, affected_rows: int) -
         "affected_rows": affected_rows,
         "created_at": pd.Timestamp.now("UTC").isoformat(),
     }
+
+
+def _missing_trading_day_count(df: pd.DataFrame, market: str) -> int:
+    missing = 0
+    for _, group in df.groupby("symbol"):
+        dates = set(pd.to_datetime(group["date"]).dt.date)
+        if len(dates) < 2:
+            continue
+        expected = set(get_trading_days(market, min(dates), max(dates)))
+        missing += len(expected - dates)
+    return missing
+
+
+def _stale_symbol_count(df: pd.DataFrame, market: str) -> int:
+    max_seen = max(pd.to_datetime(df["date"]).dt.date)
+    try:
+        expected_latest = previous_trading_day(
+            market,
+            pd.Timestamp.now(tz="UTC").date() + timedelta(days=1),
+        )
+    except Exception:
+        expected_latest = max_seen
+    stale = 0
+    for _, group in df.groupby("symbol"):
+        symbol_latest = max(pd.to_datetime(group["date"]).dt.date)
+        if symbol_latest < expected_latest:
+            stale += 1
+    return stale
