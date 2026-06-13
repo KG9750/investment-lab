@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -11,22 +12,66 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from src.config import load_yaml
 from src.ui.chrome import inject_workbench_css, localize_table, page_header, status_band
 from src.ui.cli_bridge import build_update_args, stream_cli
+from src.ui.state import recent_provider_health
 
 
 def _try_json(line: str) -> dict | None:
     try:
-        import json
-
         value = json.loads(line)
     except json.JSONDecodeError:
         return None
     return value if isinstance(value, dict) else None
 
 
+def _provider_health_hint(market: str) -> None:
+    events = recent_provider_health(80)
+    if events.empty:
+        st.info("暂无数据源健康记录。可先到“数据源状态”页面运行 quick 检查。")
+        return
+    events = events[events["market"] == market].copy()
+    if events.empty:
+        st.info(f"暂无 {market} 市场的数据源健康记录。")
+        return
+    rows = []
+    for provider, group in events.groupby("provider", sort=False):
+        latest = group.sort_values("created_at").iloc[-1]
+        details = _decode_details(latest.get("details"))
+        rows.append(
+            {
+                "provider": provider,
+                "status": "ok" if latest.get("severity") == "info" else "failed",
+                "error_type": details.get("error_type"),
+                "elapsed_ms": details.get("elapsed_ms"),
+                "proxy_mode": details.get("proxy_mode"),
+                "message": latest.get("message"),
+            }
+        )
+    health = pd.DataFrame(rows)
+    ok = health[health["status"] == "ok"]
+    if ok.empty:
+        st.warning("最近健康检查显示当前市场暂无可用数据源。建议尝试切换网络模式或稍后重试。")
+    else:
+        st.success("当前推荐数据源：" + ", ".join(ok["provider"].astype(str).tolist()))
+    st.dataframe(localize_table(health), width="stretch", hide_index=True)
+
+
+def _decode_details(value: object) -> dict:
+    if not value:
+        return {}
+    if isinstance(value, dict):
+        return value
+    try:
+        decoded = json.loads(str(value))
+    except json.JSONDecodeError:
+        return {}
+    return decoded if isinstance(decoded, dict) else {}
+
+
 inject_workbench_css()
 page_header("数据更新", "数据源接入")
 
 market = st.segmented_control("市场", ["CN", "HK", "US"], default="US")
+_provider_health_hint(market)
 default_symbols = {
     "CN": "000001.SZ,600000.SH",
     "HK": "0700.HK,9988.HK",

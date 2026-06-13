@@ -1,5 +1,5 @@
 CN:
-  price: [akshare, baostock, efinance]
+  price: [baostock, akshare, efinance]
   fundamentals: [akshare, baostock]
 HK:
   price: [akshare, yfinance, efinance]

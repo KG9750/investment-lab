@@ -66,7 +66,7 @@ uv run python -m src.cli ui
 
 默认不启用 Tushare，因为它依赖 token 和积分。当前阶段使用免费/公开数据源：
 
-- CN price: `akshare -> baostock -> efinance`
+- CN price: `baostock -> akshare -> efinance`
 - HK price: `akshare -> yfinance -> efinance`
 - US price: `yfinance -> efinance`
 
@@ -116,6 +116,26 @@ PROXY_MODE=direct make smoke-data
 ```bash
 RUN_REAL_UPDATE=1 make smoke-data
 ```
+
+## CN Real Data Loop
+
+当前已验证的 A 股最小真实闭环使用 `CN_REAL_MINI` 股票池：
+
+- `000001.SZ`
+- `600000.SH`
+- `000858.SZ`
+
+复跑命令：
+
+```bash
+make update-cn-real
+uv run python -m src.cli data-quality --snapshot-id <snapshot-id> --market CN --output json
+make screen-cn-real
+make backtest-cn-real
+uv run python -m src.cli report --run-id <backtest-run-id> --output json
+```
+
+该闭环配置为 `allow_synthetic: false`，筛选和回测会排除历史 synthetic 数据，只使用真实 provider 数据。
 
 ## Limitations
 

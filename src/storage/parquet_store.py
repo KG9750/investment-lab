@@ -10,6 +10,7 @@ import pandas as pd
 from src.config import DATA_DIR, ensure_data_dirs
 
 PRICE_KEYS = ["market", "symbol", "date", "adjust", "provider"]
+CANONICAL_PRICE_KEYS = ["market", "symbol", "date"]
 
 
 class ParquetStore:
@@ -134,3 +135,18 @@ class ParquetStore:
             raise
         shutil.rmtree(old_root, ignore_errors=True)
         return len(df)
+
+
+def canonicalize_prices(prices: pd.DataFrame) -> pd.DataFrame:
+    if prices.empty:
+        return prices
+    df = prices.copy()
+    df["row_fetched_at"] = pd.to_datetime(df["row_fetched_at"], errors="coerce", utc=True)
+    df["_provider_rank"] = (df["provider"].astype(str) != "synthetic").astype(int)
+    df = df.sort_values(CANONICAL_PRICE_KEYS + ["_provider_rank", "row_fetched_at"])
+    df = df.drop_duplicates(CANONICAL_PRICE_KEYS, keep="last")
+    return (
+        df.drop(columns=["_provider_rank"])
+        .sort_values(["symbol", "date"])
+        .reset_index(drop=True)
+    )

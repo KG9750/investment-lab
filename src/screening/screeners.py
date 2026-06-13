@@ -11,7 +11,7 @@ from src.indicators import add_indicators
 from src.screening.rules import apply_filter, enrich_rule_fields
 from src.screening.universe import get_universe_members
 from src.storage.metadata import make_run_id
-from src.storage.parquet_store import ParquetStore
+from src.storage.parquet_store import ParquetStore, canonicalize_prices
 
 
 def run_screen(config_path: str | Path) -> tuple[pd.DataFrame, dict]:
@@ -21,6 +21,9 @@ def run_screen(config_path: str | Path) -> tuple[pd.DataFrame, dict]:
     prices = ParquetStore().read_prices(market=market, symbols=members or None)
     if prices.empty:
         raise ValueError(f"No local price data found for screen {config['name']} market={market}")
+    prices = canonicalize_prices(prices)
+    if config.get("allow_synthetic") is False:
+        prices = prices[prices["provider"].astype(str) != "synthetic"].copy()
     quality = check_price_frame(prices, market=market)
     blocking = quality[quality["severity"] == "blocking"] if not quality.empty else quality
     if not blocking.empty:

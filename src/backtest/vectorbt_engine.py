@@ -8,7 +8,7 @@ from src.backtest.strategies import etf_rotation_returns, ma_cross_returns
 from src.config import DATA_DIR, load_yaml
 from src.screening.universe import get_universe_config, get_universe_members
 from src.storage.metadata import make_run_id
-from src.storage.parquet_store import ParquetStore
+from src.storage.parquet_store import ParquetStore, canonicalize_prices
 
 
 def run_backtest(config_path: str | Path) -> tuple[pd.DataFrame, dict]:
@@ -26,6 +26,9 @@ def run_backtest(config_path: str | Path) -> tuple[pd.DataFrame, dict]:
     )
     if prices.empty:
         raise ValueError(f"No local price data found for backtest {config['name']} market={market}")
+    prices = canonicalize_prices(prices)
+    if config.get("allow_synthetic") is False:
+        prices = prices[prices["provider"].astype(str) != "synthetic"].copy()
     strategy_prices = prices[prices["symbol"].isin(members)].copy()
     if strategy_prices.empty:
         raise ValueError(f"No strategy price data found for universe {config['universe']}")

@@ -1,0 +1,16 @@
+name: trend_cn_real_mini
+market: CN
+universe: CN_REAL_MINI
+allow_synthetic: false
+as_of: latest
+filters:
+  - field: close_above_ma60
+    op: eq
+    value: true
+  - field: ma20_above_ma60
+    op: eq
+    value: true
+sort:
+  - field: momentum_60d
+    direction: desc
+limit: 10
