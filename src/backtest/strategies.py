@@ -19,19 +19,29 @@ def ma_cross_returns(
     returns = df.groupby("symbol")["close"].pct_change().fillna(0)
     turnover = signal.astype(int).groupby(df["symbol"]).diff().abs().fillna(signal.astype(int))
     cost = float(costs.get("commission", 0)) + float(costs.get("slippage", 0))
-    df["strategy_return"] = signal.astype(float) * returns - turnover * cost
+    df["gross_strategy_return"] = signal.astype(float) * returns
+    df["turnover"] = turnover
+    df["cost_return"] = turnover * cost
+    df["strategy_return"] = df["gross_strategy_return"] - df["cost_return"]
     df["is_held"] = signal.astype(bool)
     universe_count = int(df["symbol"].nunique())
     grouped = df.groupby("date", as_index=False).agg(
         strategy_return=("strategy_return", "sum"),
+        gross_strategy_return=("gross_strategy_return", "sum"),
+        cost_return=("cost_return", "sum"),
+        turnover=("turnover", "sum"),
         held_count=("is_held", "sum"),
     )
     portfolio = grouped.rename(columns={"held_count": "held_count"})
     portfolio["strategy_return"] = portfolio["strategy_return"] / max(universe_count, 1)
+    portfolio["gross_strategy_return"] = portfolio["gross_strategy_return"] / max(universe_count, 1)
+    portfolio["cost_return"] = portfolio["cost_return"] / max(universe_count, 1)
+    portfolio["turnover"] = portfolio["turnover"] / max(universe_count, 1)
     portfolio["universe_count"] = universe_count
     portfolio["gross_exposure"] = portfolio["held_count"] / max(universe_count, 1)
     portfolio["cash_weight"] = 1 - portfolio["gross_exposure"]
     portfolio["equity"] = (1 + portfolio["strategy_return"]).cumprod()
+    portfolio["drawdown"] = portfolio["equity"] / portfolio["equity"].cummax() - 1
     return portfolio
 
 
@@ -61,12 +71,24 @@ def etf_rotation_returns(
             holdings = pending_holdings
             pending_holdings = None
         held = day_rows[day_rows["symbol"].isin(holdings)]
-        daily_return = 0.0 if held.empty else float(held["asset_return"].mean())
-        rows.append({"date": day, "strategy_return": daily_return - turnover * cost})
+        gross_return = 0.0 if held.empty else float(held["asset_return"].mean())
+        cost_return = turnover * cost
+        rows.append(
+            {
+                "date": day,
+                "strategy_return": gross_return - cost_return,
+                "gross_strategy_return": gross_return,
+                "cost_return": cost_return,
+                "turnover": turnover,
+                "held_count": len(holdings),
+                "held_symbols": ",".join(sorted(holdings)),
+            }
+        )
         if day in rebalance_days or not holdings:
             ranked = day_rows.dropna(subset=["momentum"]).sort_values("momentum", ascending=False)
             if not ranked.empty:
                 pending_holdings = set(ranked.head(top_n)["symbol"])
     out = pd.DataFrame(rows)
     out["equity"] = (1 + out["strategy_return"]).cumprod()
+    out["drawdown"] = out["equity"] / out["equity"].cummax() - 1
     return out

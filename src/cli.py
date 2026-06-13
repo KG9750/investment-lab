@@ -870,17 +870,18 @@ def backtest(
         summary.update({"config_hash": config_hash(cfg), "market": cfg.get("market")})
         result, meta = run_backtest(config)
         html = None
-        if cfg.get("output", {}).get("quantstats", False):
-            returns = pd.Series(
-                result["strategy_return"].values,
-                index=pd.to_datetime(result["date"]),
-            )
+        returns = pd.Series(
+            result["strategy_return"].values,
+            index=pd.to_datetime(result["date"]),
+        )
+        if cfg.get("output", {}).get("quantstats", False) and returns.abs().sum() > 0:
             html = generate_quantstats_html(returns, meta["run_id"])
         summary.update(
             {
                 "run_id": meta["run_id"],
                 "snapshot_id": meta.get("snapshot_id"),
                 "row_count": int(len(result)),
+                "result_path": meta["path"],
                 "report_path": str(html) if html else meta["path"],
                 "data_range_start": meta.get("data_range_start"),
                 "data_range_end": meta.get("data_range_end"),
@@ -890,6 +891,8 @@ def backtest(
                 "max_drawdown": meta["max_drawdown"],
                 "sharpe": meta["sharpe"],
                 "turnover": meta["turnover"],
+                "average_gross_exposure": meta.get("average_gross_exposure"),
+                "total_cost_return": meta.get("total_cost_return"),
             }
         )
         record_run(

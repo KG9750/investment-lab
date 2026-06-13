@@ -94,6 +94,9 @@ Generated at: {utc_now_str()}
 - portfolio_semantics: `{_portfolio_semantics(config)}`
 - benchmark: `{json.dumps(config.get("benchmark", {}), ensure_ascii=False, default=str)}`
 - costs: `{json.dumps(config.get("costs", {}), ensure_ascii=False, default=str)}`
+- turnover: `{row.get("turnover", "见回测结果")}`
+- average_gross_exposure: `{row.get("average_gross_exposure", "见回测结果")}`
+- total_cost_return: `{row.get("total_cost_return", "见回测结果")}`
 
 ## Quality And Errors
 

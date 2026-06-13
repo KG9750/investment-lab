@@ -65,3 +65,5 @@ output:
     assert meta["data_range_start"] is not None
     assert meta["data_range_end"] is not None
     assert meta["provider_summary"]["providers"] == ["test"]
+    assert meta["turnover"] is not None
+    assert meta["total_cost_return"] is not None

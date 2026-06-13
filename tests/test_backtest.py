@@ -16,7 +16,15 @@ def test_ma_cross_shifts_signal() -> None:
         }
     )
     result = ma_cross_returns(prices, 5, 20, {"commission": 0, "slippage": 0})
-    assert {"date", "strategy_return", "equity"}.issubset(result.columns)
+    assert {
+        "date",
+        "strategy_return",
+        "gross_strategy_return",
+        "cost_return",
+        "turnover",
+        "equity",
+        "drawdown",
+    }.issubset(result.columns)
     assert result["equity"].iloc[-1] > 0
 
 
@@ -39,3 +47,4 @@ def test_etf_rotation_does_not_use_same_day_momentum_return() -> None:
     assert result.loc[result["date"] == pd.Timestamp("2024-01-04").date(), "strategy_return"].iloc[
         0
     ] == 0
+    assert {"turnover", "cost_return", "held_symbols", "drawdown"}.issubset(result.columns)

@@ -52,6 +52,12 @@ def run_backtest(config_path: str | Path) -> tuple[pd.DataFrame, dict]:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     result.to_parquet(out_path, index=False)
     stats = summarize_returns(result["strategy_return"])
+    if "turnover" in result:
+        stats["turnover"] = float(result["turnover"].fillna(0).sum())
+    if "gross_exposure" in result:
+        stats["average_gross_exposure"] = float(result["gross_exposure"].fillna(0).mean())
+    if "cost_return" in result:
+        stats["total_cost_return"] = float(result["cost_return"].fillna(0).sum())
     meta = {
         "run_id": run_id,
         "path": str(out_path),
@@ -96,4 +102,6 @@ def summarize_returns(returns: pd.Series) -> dict:
         "sharpe": float(sharpe),
         "max_drawdown": float(drawdown.min()) if not drawdown.empty else 0.0,
         "turnover": None,
+        "average_gross_exposure": None,
+        "total_cost_return": None,
     }
