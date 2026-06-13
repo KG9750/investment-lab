@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 
 from src.data_sources.base import PriceRequest, ProviderError, standardize_price_frame
@@ -59,3 +61,39 @@ def test_provider_attempt_records_fallback_metadata() -> None:
     assert payload[1]["ok"] is True
     assert payload[1]["fallback_reason"] == "previous providers failed: first"
     assert payload[1]["elapsed_ms"] >= 0
+
+
+def test_direct_proxy_mode_clears_proxy_env(monkeypatch) -> None:
+    class EnvSource:
+        def get_price(self, request: PriceRequest) -> pd.DataFrame:
+            assert "HTTPS_PROXY" not in os.environ
+            raw = pd.DataFrame(
+                {
+                    "Date": ["2024-01-02"],
+                    "Open": [10],
+                    "High": [11],
+                    "Low": [9],
+                    "Close": [10.5],
+                    "Volume": [100],
+                }
+            )
+            return standardize_price_frame(
+                raw,
+                request=request,
+                provider="envtest",
+                provider_symbol="SPY",
+                adjust="raw",
+            )
+
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9999")
+    router = ProviderRouter(proxy_mode="direct")
+    router.priority = {"US": {"price": ["envtest"]}}
+    router.settings = {"envtest": {"enabled": True, "proxy_mode": "env"}}
+    router.sources = {"envtest": EnvSource()}
+
+    _, attempts = router.get_price(PriceRequest("SPY", "US", "2024-01-01"))
+    payload = router.summary(attempts)["attempts"]
+
+    assert os.environ["HTTPS_PROXY"] == "http://127.0.0.1:9999"
+    assert payload[0]["ok"] is True
+    assert payload[0]["proxy_mode"] == "direct"

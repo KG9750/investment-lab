@@ -54,6 +54,11 @@ adjust = control_cols[1].selectbox(
     "复权口径",
     ["provider_default", "raw", "forward_adjusted", "backward_adjusted", "auto_adjusted"],
 )
+proxy_mode = st.selectbox(
+    "网络模式",
+    ["env", "direct"],
+    help="env 使用当前代理环境；direct 临时直连。",
+)
 if st.button("运行更新"):
     try:
         args = build_update_args(
@@ -63,6 +68,7 @@ if st.button("运行更新"):
             start=start,
             adjust=adjust,
             strict=source_mode == "自定义标的",
+            proxy_mode=proxy_mode,
         )
         st.markdown(
             f'<div class="command-strip">{" ".join(["python", "-m", "src.cli", *args])}</div>',

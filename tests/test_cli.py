@@ -109,6 +109,9 @@ def test_update_data_strict_records_symbol_failure_event() -> None:
 
 def test_provider_health_records_structured_event(monkeypatch) -> None:
     class FakeRouter:
+        def __init__(self, *args, **kwargs) -> None:
+            self.proxy_mode = kwargs.get("proxy_mode")
+
         def providers_for(self, market: str, dataset: str = "price") -> list[str]:
             return ["fake"]
 
@@ -126,6 +129,7 @@ def test_provider_health_records_structured_event(monkeypatch) -> None:
                 symbol=request.symbol,
                 elapsed_ms=12,
                 fallback_reason=fallback_reason,
+                proxy_mode=self.proxy_mode or "env",
             )
             return pd.DataFrame({"close": [1]}), attempt
 
@@ -135,13 +139,24 @@ def test_provider_health_records_structured_event(monkeypatch) -> None:
     monkeypatch.setattr("src.cli.ProviderRouter", FakeRouter)
     result = runner.invoke(
         app,
-        ["provider-health", "--mode", "quick", "--market", "US", "--output", "json"],
+        [
+            "provider-health",
+            "--mode",
+            "quick",
+            "--market",
+            "US",
+            "--proxy-mode",
+            "direct",
+            "--output",
+            "json",
+        ],
     )
     payload = json.loads(result.stdout.strip().splitlines()[-1])
 
     assert result.exit_code == 0
     assert payload["task"] == "provider-health"
     assert payload["matrix"][0]["status"] == "ok"
+    assert payload["attempts"][0]["proxy_mode"] == "direct"
     with connect() as con:
         row = con.execute(
             """
@@ -158,6 +173,9 @@ def test_provider_health_records_structured_event(monkeypatch) -> None:
 
 def test_provider_health_dry_run_does_not_write_event(monkeypatch) -> None:
     class FakeRouter:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
         def providers_for(self, market: str, dataset: str = "price") -> list[str]:
             return ["fake"]
 
@@ -225,6 +243,9 @@ def test_cross_provider_check_reports_close_diff(monkeypatch) -> None:
         )
 
     class FakeRouter:
+        def __init__(self, *args, **kwargs) -> None:
+            self.proxy_mode = kwargs.get("proxy_mode")
+
         def providers_for(self, market: str, dataset: str = "price") -> list[str]:
             return ["p1", "p2"]
 
@@ -236,7 +257,13 @@ def test_cross_provider_check_reports_close_diff(monkeypatch) -> None:
             fallback_reason: str | None = None,
         ):
             frame = price(provider, 100 if provider == "p1" else 102)
-            return frame, ProviderAttempt(provider=provider, ok=True, message="ok", symbol="SPY")
+            return frame, ProviderAttempt(
+                provider=provider,
+                ok=True,
+                message="ok",
+                symbol="SPY",
+                proxy_mode=self.proxy_mode or "env",
+            )
 
         def summary(self, attempts: list[ProviderAttempt]) -> dict:
             return {"attempts": [attempt.__dict__ for attempt in attempts]}
@@ -252,6 +279,8 @@ def test_cross_provider_check_reports_close_diff(monkeypatch) -> None:
             "SPY",
             "--close-threshold-pct",
             "0.5",
+            "--proxy-mode",
+            "direct",
             "--dry-run",
             "--output",
             "json",
@@ -261,5 +290,6 @@ def test_cross_provider_check_reports_close_diff(monkeypatch) -> None:
 
     assert result.exit_code == 0
     assert payload["task"] == "cross-provider-check"
+    assert payload["attempts"][0]["proxy_mode"] == "direct"
     assert any(finding["category"] == "close_diff" for finding in payload["findings"])
     assert payload["note"] == "不判断真值，只提示不同数据源之间的差异。"

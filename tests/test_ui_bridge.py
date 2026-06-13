@@ -17,10 +17,12 @@ def test_build_update_args_uses_market_symbols() -> None:
         universe=None,
         start="2018-01-01",
         adjust="provider_default",
+        proxy_mode="direct",
     )
     assert "--market" in args
     assert args[args.index("--market") + 1] == "CN"
     assert args[args.index("--symbols") + 1] == "000001.SZ,600000.SH"
+    assert args[args.index("--proxy-mode") + 1] == "direct"
     assert "SPY,QQQ" not in args
 
 
@@ -41,12 +43,14 @@ def test_build_provider_health_args_uses_json_output() -> None:
         mode="quick",
         market="CN",
         provider="akshare",
+        proxy_mode="direct",
         dry_run=True,
     )
 
     assert args[:2] == ["provider-health", "--mode"]
     assert "--market" in args
     assert "--provider" in args
+    assert args[args.index("--proxy-mode") + 1] == "direct"
     assert "--dry-run" in args
     assert args[-2:] == ["--output", "json"]
 
@@ -57,11 +61,13 @@ def test_build_cross_provider_args_uses_cli_contract() -> None:
         symbols="SPY,QQQ",
         start="2024-01-01",
         close_threshold_pct=0.5,
+        proxy_mode="direct",
         dry_run=True,
     )
 
     assert args[0] == "cross-provider-check"
     assert args[args.index("--symbols") + 1] == "SPY,QQQ"
     assert args[args.index("--close-threshold-pct") + 1] == "0.5"
+    assert args[args.index("--proxy-mode") + 1] == "direct"
     assert "--dry-run" in args
     assert args[-2:] == ["--output", "json"]

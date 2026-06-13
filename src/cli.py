@@ -153,7 +153,13 @@ def _attempt_to_event_details(attempt: dict[str, Any]) -> dict[str, Any]:
         "error_type": attempt.get("error_type"),
         "elapsed_ms": attempt.get("elapsed_ms"),
         "fallback_reason": attempt.get("fallback_reason"),
+        "proxy_mode": attempt.get("proxy_mode"),
     }
+
+
+def _validate_proxy_mode(proxy_mode: str | None) -> None:
+    if proxy_mode is not None and proxy_mode not in {"env", "direct"}:
+        raise ValueError("proxy-mode must be env or direct")
 
 
 def _provider_health_matrix(attempts: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -320,6 +326,7 @@ def update_data(
     adjust: Annotated[str, typer.Option("--adjust")] = "provider_default",
     resume: Annotated[bool, typer.Option("--resume")] = False,
     strict: Annotated[bool, typer.Option("--strict")] = False,
+    proxy_mode: Annotated[str | None, typer.Option("--proxy-mode")] = None,
     output: Annotated[str, typer.Option("--output")] = "text",
 ) -> None:
     ensure_data_dirs()
@@ -333,6 +340,7 @@ def update_data(
         "adjust": adjust,
         "resume": resume,
         "strict": strict,
+        "proxy_mode": proxy_mode,
     }
     run_id = make_run_id("update", market, "prices", task_config)
     snapshot_id = make_snapshot_id(market, "prices", task_config)
@@ -343,11 +351,13 @@ def update_data(
             "config_hash": config_hash(task_config),
             "market": market,
             "dataset": "prices",
+            "proxy_mode": proxy_mode or "config",
         }
     )
     try:
         requested = _resolve_symbols(symbols, universe)
-        router = ProviderRouter()
+        _validate_proxy_mode(proxy_mode)
+        router = ProviderRouter(proxy_mode=proxy_mode)
         store = ParquetStore()
         frames: list[pd.DataFrame] = []
         provider_attempts: list[dict[str, Any]] = []
@@ -561,11 +571,18 @@ def provider_health(
     mode: Annotated[str, typer.Option("--mode")] = "quick",
     provider: Annotated[str | None, typer.Option("--provider")] = None,
     market: Annotated[str | None, typer.Option("--market")] = None,
+    proxy_mode: Annotated[str | None, typer.Option("--proxy-mode")] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
     output: Annotated[str, typer.Option("--output")] = "text",
 ) -> None:
     init_db()
-    task_config = {"mode": mode, "provider": provider, "market": market, "dry_run": dry_run}
+    task_config = {
+        "mode": mode,
+        "provider": provider,
+        "market": market,
+        "proxy_mode": proxy_mode,
+        "dry_run": dry_run,
+    }
     run_id = make_run_id("provider_health", market or "ALL", mode, task_config)
     summary = _base_summary("provider-health", run_id)
     summary.update(
@@ -575,12 +592,14 @@ def provider_health(
             "dataset": "provider_health",
             "dry_run": dry_run,
             "mode": mode,
+            "proxy_mode": proxy_mode or "config",
         }
     )
     try:
         if mode not in HEALTH_SAMPLES:
             raise ValueError("mode must be quick or full")
-        router = ProviderRouter()
+        _validate_proxy_mode(proxy_mode)
+        router = ProviderRouter(proxy_mode=proxy_mode)
         targets = _providers_for_targets(router, market=market, provider=provider)
         if not targets:
             raise ValueError("No enabled provider targets matched the request")
@@ -667,6 +686,7 @@ def cross_provider_check(
     start: Annotated[str, typer.Option("--start")] = "2024-01-01",
     end: Annotated[str | None, typer.Option("--end")] = None,
     close_threshold_pct: Annotated[float, typer.Option("--close-threshold-pct")] = 0.5,
+    proxy_mode: Annotated[str | None, typer.Option("--proxy-mode")] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
     output: Annotated[str, typer.Option("--output")] = "text",
 ) -> None:
@@ -677,6 +697,7 @@ def cross_provider_check(
         "start": start,
         "end": end,
         "close_threshold_pct": close_threshold_pct,
+        "proxy_mode": proxy_mode,
         "dry_run": dry_run,
     }
     run_id = make_run_id("cross_provider", market, symbols, task_config)
@@ -687,10 +708,12 @@ def cross_provider_check(
             "market": market,
             "dataset": "cross_provider_check",
             "dry_run": dry_run,
+            "proxy_mode": proxy_mode or "config",
         }
     )
     try:
-        router = ProviderRouter()
+        _validate_proxy_mode(proxy_mode)
+        router = ProviderRouter(proxy_mode=proxy_mode)
         providers = router.providers_for(market, "price")
         if len(providers) < 2:
             raise ValueError(f"At least two enabled providers are required for {market}")

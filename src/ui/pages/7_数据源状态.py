@@ -42,6 +42,11 @@ provider_choice = cols[2].selectbox(
     "数据源",
     ["全部", "akshare", "baostock", "efinance", "yfinance", "openbb"],
 )
+proxy_mode = st.selectbox(
+    "网络模式",
+    ["env", "direct"],
+    help="env 使用当前代理环境；direct 临时直连。",
+)
 dry_run = st.checkbox("只检查，不写入台账", value=False)
 
 if st.button("运行数据源健康检查"):
@@ -49,6 +54,7 @@ if st.button("运行数据源健康检查"):
         mode=mode,
         market=None if market_choice == "全部" else market_choice,
         provider=None if provider_choice == "全部" else provider_choice,
+        proxy_mode=proxy_mode,
         dry_run=dry_run,
     )
     st.markdown(

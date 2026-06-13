@@ -80,6 +80,7 @@ def build_update_args(
     universe: str | None = None,
     resume: bool = True,
     strict: bool = False,
+    proxy_mode: str | None = None,
 ) -> list[str]:
     args = [
         "update-data",
@@ -100,6 +101,8 @@ def build_update_args(
         args.append("--resume")
     if strict:
         args.append("--strict")
+    if proxy_mode:
+        args.extend(["--proxy-mode", proxy_mode])
     args.extend(["--output", "json"])
     return args
 
@@ -109,6 +112,7 @@ def build_provider_health_args(
     mode: str,
     market: str | None = None,
     provider: str | None = None,
+    proxy_mode: str | None = None,
     dry_run: bool = False,
 ) -> list[str]:
     args = ["provider-health", "--mode", mode]
@@ -116,6 +120,8 @@ def build_provider_health_args(
         args.extend(["--market", market])
     if provider:
         args.extend(["--provider", provider])
+    if proxy_mode:
+        args.extend(["--proxy-mode", proxy_mode])
     if dry_run:
         args.append("--dry-run")
     args.extend(["--output", "json"])
@@ -129,6 +135,7 @@ def build_cross_provider_args(
     start: str,
     end: str | None = None,
     close_threshold_pct: float = 0.5,
+    proxy_mode: str | None = None,
     dry_run: bool = False,
 ) -> list[str]:
     args = [
@@ -144,6 +151,8 @@ def build_cross_provider_args(
     ]
     if end:
         args.extend(["--end", end])
+    if proxy_mode:
+        args.extend(["--proxy-mode", proxy_mode])
     if dry_run:
         args.append("--dry-run")
     args.extend(["--output", "json"])

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import current_thread, main_thread
@@ -27,6 +29,7 @@ class ProviderAttempt:
     elapsed_ms: int = 0
     retryable: bool = False
     fallback_reason: str | None = None
+    proxy_mode: str = "env"
 
 
 class ProviderRouter:
@@ -34,9 +37,11 @@ class ProviderRouter:
         self,
         provider_priority_path: str | Path = CONFIG_DIR / "provider_priority.yaml",
         data_sources_path: str | Path = CONFIG_DIR / "data_sources.yaml",
+        proxy_mode: str | None = None,
     ) -> None:
         self.priority = load_yaml(provider_priority_path)
         self.settings = load_yaml(data_sources_path)
+        self.proxy_mode = proxy_mode
         self.sources = {
             "akshare": AKShareSource(),
             "baostock": BaoStockSource(),
@@ -93,18 +98,20 @@ class ProviderRouter:
             )
         provider_settings = self.settings.get(provider, {})
         sleep_ms(int(provider_settings.get("request_interval_ms", 0)))
+        proxy_mode = self._proxy_mode_for(provider)
         timeout_seconds = (
             request.timeout_seconds or int(provider_settings.get("timeout_seconds", 0)) or None
         )
         request = replace(request, timeout_seconds=timeout_seconds)
         started = time.perf_counter()
         try:
-            df = _call_with_hard_timeout(
-                lambda: source.get_price(request),
-                timeout_seconds=timeout_seconds,
-                provider=provider,
-                symbol=request.symbol,
-            )
+            with _proxy_environment(proxy_mode):
+                df = _call_with_hard_timeout(
+                    lambda: source.get_price(request),
+                    timeout_seconds=timeout_seconds,
+                    provider=provider,
+                    symbol=request.symbol,
+                )
             elapsed_ms = int((time.perf_counter() - started) * 1000)
             if not df.empty:
                 return df, ProviderAttempt(
@@ -114,6 +121,7 @@ class ProviderRouter:
                     symbol=request.symbol,
                     elapsed_ms=elapsed_ms,
                     fallback_reason=fallback_reason,
+                    proxy_mode=proxy_mode,
                 )
             return pd.DataFrame(), ProviderAttempt(
                 provider=provider,
@@ -124,6 +132,7 @@ class ProviderRouter:
                 elapsed_ms=elapsed_ms,
                 retryable=True,
                 fallback_reason=fallback_reason,
+                proxy_mode=proxy_mode,
             )
         except ProviderError as exc:
             elapsed_ms = int((time.perf_counter() - started) * 1000)
@@ -136,6 +145,7 @@ class ProviderRouter:
                 elapsed_ms=elapsed_ms,
                 retryable=exc.retryable,
                 fallback_reason=fallback_reason,
+                proxy_mode=proxy_mode,
             )
 
     def summary(self, attempts: list[ProviderAttempt]) -> dict[str, Any]:
@@ -150,10 +160,47 @@ class ProviderRouter:
                     "elapsed_ms": item.elapsed_ms,
                     "retryable": item.retryable,
                     "fallback_reason": item.fallback_reason,
+                    "proxy_mode": item.proxy_mode,
                 }
                 for item in attempts
             ]
         }
+
+    def _proxy_mode_for(self, provider: str) -> str:
+        mode = self.proxy_mode or str(self.settings.get(provider, {}).get("proxy_mode", "env"))
+        if mode not in {"env", "direct"}:
+            return "env"
+        return mode
+
+
+PROXY_ENV_KEYS = [
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "NO_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+    "no_proxy",
+]
+
+
+@contextmanager
+def _proxy_environment(proxy_mode: str):
+    if proxy_mode != "direct":
+        yield
+        return
+    original = {key: os.environ.get(key) for key in PROXY_ENV_KEYS}
+    for key in PROXY_ENV_KEYS:
+        os.environ.pop(key, None)
+    try:
+        yield
+    finally:
+        for key, value in original.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def _call_with_hard_timeout(
